@@ -71,6 +71,17 @@ const NW_LABELS = {
   realEstate:        'Real Estate',
 };
 
+// ─── PIN Auth ──────────────────────────────────────────────────────────────────
+// SHA-256("7777") — to change PIN, update this constant:
+// node -e "require('crypto').createHash('sha256').update('YOUR_PIN').digest('hex')"
+const PIN_HASH = '41c991eb6a66242c0454191244278183ce58cf4a6bcd372f799e4b9cc01886af';
+const SESSION_KEY = 'mag_auth';
+
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ─── Asset Acquisition Roadmap ─────────────────────────────────────────────────
 const ROADMAP_MILESTONES = [
   { id: 'skidsteer', label: 'Skid Steer / Equipment Rental', icon: '🏗', minCost: 25000,  maxCost: 40000,  color: '#f97316', description: 'Used equipment for rental to homeowners & contractors' },
@@ -329,7 +340,111 @@ function calcDriftAlerts(alloc) {
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────────
+function PinLock({ onUnlock }) {
+  const [digits, setDigits] = useState([]);
+  const [shake,  setShake]  = useState(false);
+  const [error,  setError]  = useState('');
+
+  const addDigit = useCallback((d) => {
+    setError('');
+    setDigits(prev => {
+      if (prev.length >= 4) return prev;
+      const next = [...prev, d];
+      if (next.length === 4) {
+        hashPin(next.join('')).then(h => {
+          if (h === PIN_HASH) {
+            sessionStorage.setItem(SESSION_KEY, '1');
+            onUnlock();
+          } else {
+            setShake(true);
+            setError('Incorrect PIN');
+            setTimeout(() => { setShake(false); setDigits([]); setError(''); }, 700);
+          }
+        });
+      }
+      return next;
+    });
+  }, [onUnlock]);
+
+  const del = useCallback(() => setDigits(p => p.slice(0, -1)), []);
+
+  const pad = [1,2,3,4,5,6,7,8,9,null,0,'⌫'];
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: '#0a0d14',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', zIndex: 9999, userSelect: 'none',
+    }}>
+      {/* Logo */}
+      <div style={{ fontSize: 13, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>
+        ◆ Mir Asset Group
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: '#d4a843', marginBottom: 48, letterSpacing: '-0.5px' }}>
+        Private Dashboard
+      </div>
+
+      {/* Dots */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 12,
+        transform: shake ? 'translateX(0)' : undefined,
+        animation: shake ? 'pinShake 0.6s ease' : undefined,
+      }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width: 14, height: 14, borderRadius: '50%',
+            background: digits.length > i ? '#d4a843' : 'transparent',
+            border: `2px solid ${digits.length > i ? '#d4a843' : '#334155'}`,
+            transition: 'background 0.15s, border-color 0.15s',
+          }} />
+        ))}
+      </div>
+      <div style={{ height: 20, fontSize: 13, color: '#ef4444', marginBottom: 32 }}>{error}</div>
+
+      {/* Numpad */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 72px)', gap: 12 }}>
+        {pad.map((k, i) => {
+          if (k === null) return <div key={i} />;
+          const isDel = k === '⌫';
+          return (
+            <button
+              key={i}
+              onClick={() => isDel ? del() : addDigit(k)}
+              style={{
+                width: 72, height: 72, borderRadius: '50%',
+                background: isDel ? 'transparent' : '#1e2535',
+                border: isDel ? 'none' : '1px solid #2d3748',
+                color: isDel ? '#94a3b8' : '#f1f5f9',
+                fontSize: isDel ? 22 : 24,
+                fontWeight: isDel ? 400 : 600,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => { if (!isDel) e.currentTarget.style.background = '#2d3748'; }}
+              onMouseLeave={e => { if (!isDel) e.currentTarget.style.background = '#1e2535'; }}
+            >
+              {k}
+            </button>
+          );
+        })}
+      </div>
+
+      <style>{`
+        @keyframes pinShake {
+          0%,100% { transform: translateX(0); }
+          20%      { transform: translateX(-8px); }
+          40%      { transform: translateX(8px); }
+          60%      { transform: translateX(-6px); }
+          80%      { transform: translateX(6px); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function App() {
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
   const [tab, setTab] = useState('dashboard');
   const [positions,     setPositions]     = useLocalStorage('mag_positions',       []);
   const [expenses,      setExpenses]      = useLocalStorage('mag_expenses',        []);
@@ -348,6 +463,8 @@ export default function App() {
     { id: 'tithe',     label: 'Tithe'     },
     { id: 'roadmap',   label: 'Roadmap'   },
   ];
+
+  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />;
 
   return (
     <div style={S.app}>

@@ -11,24 +11,40 @@ const WEEKLY_GROSS = 1649;
 const MONTHLY_GROSS = Math.round(WEEKLY_GROSS * 52 / 12); // ~7145
 const TITHE_RATE = 0.10;
 
-const ALLOCATION_TARGETS = {
-  'QQQ':       25,
-  'Crypto':    25,
-  'Dividends': 15,
-  'Quantum':   10,
-  'Gold':      10,
-  'Energy':    10,
-  'Silver':     5,
+// Legacy color map — used as fallback for positions created before dynamic buckets
+const BUCKET_COLORS = {
+  'QQQ':                 '#6366f1',
+  'Crypto':              '#f97316',
+  'Dividends':           '#22c55e',
+  'Quantum':             '#8b5cf6',
+  'Quantum/Emerging':    '#8b5cf6',
+  'Gold':                '#d4a843',
+  'Energy':              '#ef4444',
+  'Energy/Commodities':  '#ef4444',
+  'Silver':              '#94a3b8',
 };
 
-const BUCKET_COLORS = {
-  'QQQ':       '#6366f1',
-  'Crypto':    '#f97316',
-  'Dividends': '#22c55e',
-  'Quantum':   '#8b5cf6',
-  'Gold':      '#d4a843',
-  'Energy':    '#ef4444',
-  'Silver':    '#94a3b8',
+// Default buckets seeded on first load (stored in mag_buckets)
+const DEFAULT_BUCKETS = [
+  { id: 'qqq',     name: 'QQQ',               color: '#6366f1' },
+  { id: 'crypto',  name: 'Crypto',             color: '#f97316' },
+  { id: 'div',     name: 'Dividends',          color: '#22c55e' },
+  { id: 'quantum', name: 'Quantum/Emerging',   color: '#8b5cf6' },
+  { id: 'gold',    name: 'Gold',               color: '#d4a843' },
+  { id: 'energy',  name: 'Energy/Commodities', color: '#ef4444' },
+  { id: 'silver',  name: 'Silver',             color: '#94a3b8' },
+];
+
+const BUCKET_COLOR_PALETTE = [
+  '#6366f1','#f97316','#22c55e','#8b5cf6','#d4a843','#ef4444',
+  '#94a3b8','#06b6d4','#ec4899','#84cc16','#f59e0b','#10b981',
+];
+
+const ASSET_TYPE_META = {
+  'Security': { icon: '📈', qtyUnit: 'shares', priceUnit: '$/share' },
+  'Crypto':   { icon: '🪙', qtyUnit: 'tokens', priceUnit: '$/token' },
+  'Gold':     { icon: '🥇', qtyUnit: 'oz t',   priceUnit: '$/oz t'  },
+  'Silver':   { icon: '🥈', qtyUnit: 'oz t',   priceUnit: '$/oz t'  },
 };
 
 const EXPENSE_CATEGORIES = [
@@ -302,6 +318,16 @@ const fmtPct = (n, dec = 1) => n == null ? '–' : (n >= 0 ? '+' : '') + Number(
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 const CURRENT_MONTH = TODAY_STR.slice(0, 7);
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setMobile(window.innerWidth < 768);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return mobile;
+}
+
 function useLocalStorage(key, init) {
   const [val, setVal] = useState(() => {
     try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : init; }
@@ -332,8 +358,21 @@ function portfolioStats(positions) {
   return { totalValue, byBucket, alloc };
 }
 
-function calcDriftAlerts(alloc) {
-  return Object.entries(ALLOCATION_TARGETS)
+function getBucketColor(buckets, name) {
+  const b = (buckets || []).find(x => x.name === name);
+  return b ? b.color : (BUCKET_COLORS[name] || '#64748b');
+}
+
+function inferAssetType(bucketName) {
+  const n = (bucketName || '').toLowerCase();
+  if (n.includes('crypto')) return 'Crypto';
+  if (n.includes('gold'))   return 'Gold';
+  if (n.includes('silver')) return 'Silver';
+  return 'Security';
+}
+
+function calcDriftAlerts(alloc, targets) {
+  return Object.entries(targets || {})
     .map(([bucket, target]) => ({ bucket, target, actual: alloc[bucket] || 0, drift: (alloc[bucket] || 0) - target }))
     .filter(d => Math.abs(d.drift) > 3)
     .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
@@ -445,49 +484,93 @@ function PinLock({ onUnlock }) {
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
-  const [tab, setTab] = useState('dashboard');
-  const [positions,     setPositions]     = useLocalStorage('mag_positions',       []);
-  const [expenses,      setExpenses]      = useLocalStorage('mag_expenses',        []);
-  const [nwSnapshots,   setNwSnapshots]   = useLocalStorage('mag_nw_snapshots',    []);
-  const [nwMilestones,  setNwMilestones]  = useLocalStorage('mag_nw_milestones',   []);
-  const [givingEntries, setGivingEntries] = useLocalStorage('mag_giving',          []);
-  const [roadmapSavings,setRoadmapSavings]= useLocalStorage('mag_roadmap_savings', {});
+  const [tab,      setTab]      = useState('dashboard');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  const [positions,      setPositions]      = useLocalStorage('mag_positions',       []);
+  const [expenses,       setExpenses]        = useLocalStorage('mag_expenses',        []);
+  const [nwSnapshots,    setNwSnapshots]     = useLocalStorage('mag_nw_snapshots',    []);
+  const [nwMilestones,   setNwMilestones]    = useLocalStorage('mag_nw_milestones',   []);
+  const [givingEntries,  setGivingEntries]   = useLocalStorage('mag_giving',          []);
+  const [roadmapSavings, setRoadmapSavings]  = useLocalStorage('mag_roadmap_savings', {});
+  const [buckets,        setBuckets]         = useLocalStorage('mag_buckets',         DEFAULT_BUCKETS);
+  const [targets,        setTargets]         = useLocalStorage('mag_targets',         {});
 
   const { totalValue } = useMemo(() => portfolioStats(positions), [positions]);
 
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'portfolio', label: 'Portfolio' },
-    { id: 'spending',  label: 'Spending'  },
-    { id: 'networth',  label: 'Net Worth' },
-    { id: 'tithe',     label: 'Tithe'     },
-    { id: 'roadmap',   label: 'Roadmap'   },
-    { id: 'scanner',   label: 'AI Scanner'},
+    { id: 'dashboard', label: 'Dashboard'  },
+    { id: 'portfolio', label: 'Portfolio'  },
+    { id: 'spending',  label: 'Spending'   },
+    { id: 'networth',  label: 'Net Worth'  },
+    { id: 'tithe',     label: 'Tithe'      },
+    { id: 'roadmap',   label: 'Roadmap'    },
+    { id: 'scanner',   label: 'AI Scanner' },
   ];
+
+  const switchTab = useCallback((id) => { setTab(id); setMenuOpen(false); }, []);
 
   if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />;
 
   return (
     <div style={S.app}>
-      <header style={S.header}>
+      <header style={{ ...S.header, height: isMobile ? 52 : 56 }}>
         <div style={S.logo}>&#9670; Mir Asset Group</div>
-        <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
-          {tabs.map(t => (
-            <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => setTab(t.id)}>{t.label}</button>
-          ))}
-        </nav>
+        {isMobile ? (
+          <button onClick={() => setMenuOpen(m => !m)} style={{ background: 'none', border: 'none', color: '#d4a843', fontSize: 24, cursor: 'pointer', padding: '8px 4px', lineHeight: 1 }}>
+            {menuOpen ? '✕' : '☰'}
+          </button>
+        ) : (
+          <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
+            {tabs.map(t => (
+              <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => switchTab(t.id)}>{t.label}</button>
+            ))}
+          </nav>
+        )}
       </header>
-      <main style={S.body}>
+
+      {/* Mobile full-screen nav overlay */}
+      {isMobile && menuOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: '#0a0d14', zIndex: 200, display: 'flex', flexDirection: 'column', paddingTop: 52 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => switchTab(t.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '18px 24px', background: 'none', border: 'none',
+              borderBottom: '1px solid #1e2535',
+              color: tab === t.id ? '#d4a843' : '#94a3b8',
+              fontWeight: tab === t.id ? 700 : 400,
+              fontSize: 17, cursor: 'pointer', textAlign: 'left',
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: tab === t.id ? '#d4a843' : 'transparent', border: `1px solid ${tab === t.id ? '#d4a843' : '#334155'}`, flexShrink: 0 }} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <main style={{ ...S.body, padding: isMobile ? '16px 12px' : '20px 16px' }}>
         {tab === 'dashboard' && (
           <DashboardTab
             positions={positions}
             expenses={expenses}
             onAddExpense={e => setExpenses(p => [e, ...p])}
-            onTabSwitch={setTab}
+            onTabSwitch={switchTab}
+            buckets={buckets}
+            targets={targets}
           />
         )}
-        {tab === 'portfolio' && <PortfolioTab positions={positions} setPositions={setPositions} />}
-        {tab === 'spending'  && <SpendingTab  expenses={expenses}  setExpenses={setExpenses}   />}
+        {tab === 'portfolio' && (
+          <PortfolioTab
+            positions={positions}
+            setPositions={setPositions}
+            buckets={buckets}
+            setBuckets={setBuckets}
+            targets={targets}
+            setTargets={setTargets}
+          />
+        )}
+        {tab === 'spending'  && <SpendingTab expenses={expenses} setExpenses={setExpenses} />}
         {tab === 'networth'  && (
           <NetWorthTab
             snapshots={nwSnapshots}   setSnapshots={setNwSnapshots}
@@ -514,10 +597,11 @@ function KpiCard({ label, value, sub, subColor, accent }) {
 }
 
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
-function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
+function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets, targets }) {
+  const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
-  const alerts = useMemo(() => calcDriftAlerts(alloc), [alloc]);
+  const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
 
   const thisMonthExp = useMemo(() => expenses.filter(e => e.date.startsWith(CURRENT_MONTH)), [expenses]);
   const monthlyTithe = Math.round(MONTHLY_GROSS * TITHE_RATE);
@@ -528,15 +612,25 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
   const totalPnl = totalValue - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
+  // All bucket names to show in snapshot (union of buckets array + actual positions + targets)
+  const snapshotBuckets = useMemo(() => {
+    const names = new Set([
+      ...buckets.map(b => b.name),
+      ...Object.keys(alloc).filter(k => (alloc[k] || 0) > 0),
+      ...Object.keys(targets),
+    ]);
+    return [...names];
+  }, [buckets, alloc, targets]);
+
   const recentExp = expenses.slice(0, 5);
 
   return (
     <div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>Wealth Command Center</div>
+      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>Wealth Command Center</div>
       <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>Mir Asset Group, LLC — Personal Dashboard</div>
 
       {/* ── KPI row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard label="Portfolio Value" value={fmt$(totalValue, 0)} sub={fmtPct(totalPnlPct) + ' total return'} subColor={totalPnl >= 0 ? '#22c55e' : '#ef4444'} accent="#d4a843" />
         <KpiCard label="Unrealized P&L" value={fmt$(totalPnl, 0)} sub={`${positions.length} position${positions.length !== 1 ? 's' : ''}`} subColor={totalPnl >= 0 ? '#22c55e' : '#ef4444'} accent={totalPnl >= 0 ? '#22c55e' : '#ef4444'} />
         <KpiCard label="Deployable (MTD)" value={fmt$(deployable, 0)} sub={`${fmt$(monthlySpend, 0)} spent this month`} subColor={deployable >= 0 ? '#22c55e' : '#ef4444'} accent="#d4a843" />
@@ -546,17 +640,13 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
       {/* ── Drift alerts ── */}
       {alerts.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div
-            role="button"
-            onClick={() => onTabSwitch('portfolio')}
-            style={{ ...S.sectionLabel, cursor: 'pointer', color: '#d4a843', marginTop: 0 }}
-          >
+          <div role="button" onClick={() => onTabSwitch('portfolio')} style={{ ...S.sectionLabel, cursor: 'pointer', color: '#d4a843', marginTop: 0 }}>
             &#9888; Allocation Drift — click to manage
           </div>
           {alerts.slice(0, 4).map(a => (
             <div key={a.bucket} style={S.alert}>
-              <span style={S.tag(BUCKET_COLORS[a.bucket] || '#d4a843')}>{a.bucket}</span>
-              <span style={{ color: '#94a3b8' }}>{a.actual.toFixed(1)}% actual vs {a.target}% target</span>
+              <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
+              <span style={{ color: '#94a3b8', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
               <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#ef4444' : '#22c55e' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}%
               </span>
@@ -566,7 +656,7 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
       )}
 
       {/* ── Lower row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
         {/* Allocation snapshot */}
         <div style={S.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -575,36 +665,38 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
           </div>
           {positions.length === 0 ? (
             <div style={{ color: '#475569', fontSize: 13, padding: '12px 0' }}>No positions — add them in Portfolio tab</div>
-          ) : (
-            Object.entries(ALLOCATION_TARGETS).map(([bucket, target]) => {
-              const actual = alloc[bucket] || 0;
-              const drift = actual - target;
-              const over = Math.abs(drift) > 3;
-              return (
-                <div key={bucket} style={{ marginBottom: 9 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: BUCKET_COLORS[bucket], flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>{bucket}</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: over ? (drift > 0 ? '#ef4444' : '#22c55e') : '#64748b' }}>
-                      {actual.toFixed(1)}% / {target}%{over ? (drift > 0 ? ' ▲' : ' ▼') : ''}
-                    </span>
+          ) : snapshotBuckets.map(name => {
+            const color = getBucketColor(buckets, name);
+            const actual = alloc[name] || 0;
+            const target = targets[name];
+            const hasTarget = target != null;
+            const drift = hasTarget ? actual - target : 0;
+            const over = hasTarget && Math.abs(drift) > 3;
+            const barMax = hasTarget ? Math.max(target * 1.5, actual, 5) : Math.max(actual * 1.5, 5);
+            return (
+              <div key={name} style={{ marginBottom: 9 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{name}</span>
                   </div>
-                  <div style={{ height: 4, background: '#1e2535', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min((actual / 30) * 100, 100)}%`, background: BUCKET_COLORS[bucket], borderRadius: 2, transition: 'width 0.3s' }} />
-                  </div>
+                  <span style={{ fontSize: 11, color: over ? (drift > 0 ? '#ef4444' : '#22c55e') : '#64748b' }}>
+                    {actual.toFixed(1)}%{hasTarget ? ` / ${target}%${over ? (drift > 0 ? ' ▲' : ' ▼') : ''}` : ''}
+                  </span>
                 </div>
-              );
-            })
-          )}
+                <div style={{ height: 4, background: '#1e2535', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min((actual / barMax) * 100, 100)}%`, background: color, borderRadius: 2, transition: 'width 0.3s' }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Recent expenses */}
         <div style={S.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={S.cardTitle}>Recent Expenses</div>
-            <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11 }} onClick={() => setShowQuickAdd(true)}>+ Add</button>
+            <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11, minHeight: 32 }} onClick={() => setShowQuickAdd(true)}>+ Add</button>
           </div>
           {recentExp.length === 0 ? (
             <div style={{ color: '#475569', fontSize: 13, padding: '12px 0' }}>No expenses logged yet</div>
@@ -652,44 +744,65 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch }) {
 }
 
 // ─── Portfolio Tab ─────────────────────────────────────────────────────────────
-function PortfolioTab({ positions, setPositions }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [editPos, setEditPos] = useState(null);
-  const [sortKey, setSortKey] = useState('bucket');
-  const [sortDir, setSortDir] = useState(1);
+function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, setTargets }) {
+  const isMobile = useIsMobile();
+  const [showAdd,       setShowAdd]       = useState(false);
+  const [editPos,       setEditPos]       = useState(null);
+  const [sortKey,       setSortKey]       = useState('bucket');
+  const [sortDir,       setSortDir]       = useState(1);
+  const [editingTarget, setEditingTarget] = useState(null);
+  const [targetInput,   setTargetInput]   = useState('');
 
   const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
-  const alerts = useMemo(() => calcDriftAlerts(alloc), [alloc]);
+  const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
   const totalCost = useMemo(() => positions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [positions]);
   const totalPnl = totalValue - totalCost;
 
-  const donutData = useMemo(() => Object.entries(ALLOCATION_TARGETS).map(([bucket, target]) => ({
-    name: bucket, actual: parseFloat((alloc[bucket] || 0).toFixed(1)), target,
-  })), [alloc]);
+  // All bucket names for charts: union of buckets array + actual positions
+  const allBucketNames = useMemo(() => {
+    const names = new Set([...buckets.map(b => b.name), ...Object.keys(alloc).filter(k => (alloc[k] || 0) > 0)]);
+    return [...names];
+  }, [buckets, alloc]);
 
-  const pieData = useMemo(() => Object.entries(ALLOCATION_TARGETS).map(([bucket]) => ({
-    name: bucket, value: Math.max(parseFloat((alloc[bucket] || 0).toFixed(1)), 0.01),
-  })), [alloc]);
+  const pieData = useMemo(() => allBucketNames.map(name => ({
+    name, value: Math.max(parseFloat((alloc[name] || 0).toFixed(1)), 0.01),
+  })), [allBucketNames, alloc]);
+
+  const barData = useMemo(() => allBucketNames.map(name => ({
+    name,
+    actual: parseFloat((alloc[name] || 0).toFixed(1)),
+    target: targets[name] != null ? targets[name] : undefined,
+  })), [allBucketNames, alloc, targets]);
 
   const sortedPositions = useMemo(() => {
     return [...positions].sort((a, b) => {
       if (sortKey === 'bucket') return a.bucket.localeCompare(b.bucket) * sortDir;
       if (sortKey === 'ticker') return a.ticker.localeCompare(b.ticker) * sortDir;
       let av = 0, bv = 0;
-      if (sortKey === 'value') { av = a.quantity * a.currentPrice; bv = b.quantity * b.currentPrice; }
-      else if (sortKey === 'pnl') { av = (a.currentPrice - a.avgCost) * a.quantity; bv = (b.currentPrice - b.avgCost) * b.quantity; }
+      if (sortKey === 'value')  { av = a.quantity * a.currentPrice; bv = b.quantity * b.currentPrice; }
+      else if (sortKey === 'pnl')    { av = (a.currentPrice - a.avgCost) * a.quantity; bv = (b.currentPrice - b.avgCost) * b.quantity; }
       else if (sortKey === 'pnlPct') { av = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; bv = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; }
-      else if (sortKey === 'alloc') { av = alloc[a.bucket] || 0; bv = alloc[b.bucket] || 0; }
+      else if (sortKey === 'alloc')  { av = alloc[a.bucket] || 0; bv = alloc[b.bucket] || 0; }
       return (av - bv) * sortDir;
     });
   }, [positions, sortKey, sortDir, alloc]);
 
   const toggleSort = (k) => { if (sortKey === k) setSortDir(d => -d); else { setSortKey(k); setSortDir(-1); } };
-  const sortIcon = (k) => sortKey === k ? (sortDir === -1 ? ' &#8595;' : ' &#8593;') : '';
+  const sortIcon   = (k) => sortKey === k ? (sortDir === -1 ? ' &#8595;' : ' &#8593;') : '';
+
+  const saveTarget = (name) => {
+    const v = parseFloat(targetInput);
+    if (!isNaN(v) && v >= 0 && v <= 100) {
+      setTargets(prev => ({ ...prev, [name]: v }));
+    }
+    setEditingTarget(null);
+    setTargetInput('');
+  };
+  const removeTarget = (name) => setTargets(prev => { const n = { ...prev }; delete n[name]; return n; });
 
   const handleSave = (pos) => {
     if (pos.id) { setPositions(p => p.map(x => x.id === pos.id ? pos : x)); }
-    else { setPositions(p => [{ ...pos, id: genId() }, ...p]); }
+    else        { setPositions(p => [{ ...pos, id: genId() }, ...p]); }
     setShowAdd(false); setEditPos(null);
   };
   const handleDelete = (id) => { if (window.confirm('Delete this position?')) setPositions(p => p.filter(x => x.id !== id)); };
@@ -698,14 +811,14 @@ function PortfolioTab({ positions, setPositions }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Portfolio Tracker</div>
+          <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 800, color: '#f1f5f9' }}>Portfolio Tracker</div>
           {positions.length > 0 && (
             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
               {fmt$(totalValue, 0)} total &middot; P&L <span style={{ color: totalPnl >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{fmt$(totalPnl, 0)}</span>
             </div>
           )}
         </div>
-        <button style={S.btn} onClick={() => setShowAdd(true)}>+ Add Position</button>
+        <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Add Position</button>
       </div>
 
       {/* ── Drift alerts ── */}
@@ -713,8 +826,8 @@ function PortfolioTab({ positions, setPositions }) {
         <div style={{ marginBottom: 16 }}>
           {alerts.map(a => (
             <div key={a.bucket} style={S.alert}>
-              <span style={S.tag(BUCKET_COLORS[a.bucket] || '#d4a843')}>{a.bucket}</span>
-              <span style={{ color: '#94a3b8' }}>{a.actual.toFixed(1)}% actual vs {a.target}% target</span>
+              <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
+              <span style={{ color: '#94a3b8', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
               <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#ef4444' : '#22c55e' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}% drift
               </span>
@@ -725,34 +838,68 @@ function PortfolioTab({ positions, setPositions }) {
 
       {/* ── Charts ── */}
       {positions.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 20 }}>
+          {/* Donut chart */}
           <div style={S.card}>
             <div style={S.cardTitle}>Actual Allocation — {fmt$(totalValue, 0)}</div>
             <ResponsiveContainer width="100%" height={190}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
-                  {pieData.map((entry) => <Cell key={entry.name} fill={BUCKET_COLORS[entry.name] || '#64748b'} />)}
+                  {pieData.map((entry) => <Cell key={entry.name} fill={getBucketColor(buckets, entry.name)} />)}
                 </Pie>
                 <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: 4 }}>
-              {Object.keys(ALLOCATION_TARGETS).map(b => (
-                <div key={b} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: BUCKET_COLORS[b], flexShrink: 0 }} />
-                  <span style={{ color: '#94a3b8' }}>{b} {(alloc[b] || 0).toFixed(0)}%</span>
-                </div>
-              ))}
+            {/* Bucket legend + target setter */}
+            <div style={{ marginTop: 8 }}>
+              {allBucketNames.map(name => {
+                const color = getBucketColor(buckets, name);
+                const tgt = targets[name];
+                return (
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid #0f1117', flexWrap: 'wrap' }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{(alloc[name] || 0).toFixed(1)}%</span>
+                    {editingTarget === name ? (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <input
+                          autoFocus
+                          type="number" min="0" max="100" step="0.5"
+                          value={targetInput}
+                          onChange={e => setTargetInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveTarget(name); if (e.key === 'Escape') { setEditingTarget(null); setTargetInput(''); } }}
+                          placeholder="target %"
+                          style={{ ...S.inputStyle, width: 72, padding: '3px 7px', fontSize: 12 }}
+                        />
+                        <button style={{ ...S.btn, padding: '3px 8px', fontSize: 11, minHeight: 28 }} onClick={() => saveTarget(name)}>✓</button>
+                        <button style={{ ...S.btnGhost, padding: '3px 7px', fontSize: 11, minHeight: 28 }} onClick={() => { setEditingTarget(null); setTargetInput(''); }}>✕</button>
+                      </div>
+                    ) : tgt != null ? (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: '#64748b' }}>→ {tgt}%</span>
+                        <button onClick={() => { setEditingTarget(name); setTargetInput(String(tgt)); }} style={{ ...S.btnGhost, padding: '2px 6px', fontSize: 10, minHeight: 24 }}>✎</button>
+                        <button onClick={() => removeTarget(name)} style={{ ...S.btnDanger, padding: '2px 5px', minHeight: 24 }}>✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setEditingTarget(name); setTargetInput(''); }} style={{ ...S.btnGhost, padding: '2px 8px', fontSize: 10, minHeight: 24, color: '#64748b' }}>
+                        Set target
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+
+          {/* Bar chart */}
           <div style={S.card}>
-            <div style={S.cardTitle}>Target vs Actual (%)</div>
-            <ResponsiveContainer width="100%" height={215}>
-              <BarChart data={donutData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={2}>
+            <div style={S.cardTitle}>Allocation — Actual vs Target (%)</div>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 215}>
+              <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 9 }} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-                <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+                <RTooltip formatter={(v, n) => v != null ? [`${v}%`, n] : ['–', n]} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="target" fill="#2d3748" name="Target %" radius={[3, 3, 0, 0]} />
                 <Bar dataKey="actual" fill="#d4a843" name="Actual %" radius={[3, 3, 0, 0]} />
@@ -767,12 +914,12 @@ function PortfolioTab({ positions, setPositions }) {
         <div style={{ ...S.card, textAlign: 'center', padding: '48px 20px' }}>
           <div style={{ fontSize: 40, marginBottom: 14 }}>&#128200;</div>
           <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 18 }}>No positions yet. Add your first holding to start tracking.</div>
-          <button style={S.btn} onClick={() => setShowAdd(true)}>+ Add First Position</button>
+          <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Add First Position</button>
         </div>
       ) : (
         <div style={S.card}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={S.table}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ ...S.table, minWidth: 600 }}>
               <thead>
                 <tr>
                   {[['ticker','Ticker'],['bucket','Bucket'],['value','Value'],['pnl','P&L'],['pnlPct','P&L %'],['alloc','Alloc %']].map(([k, lbl]) => (
@@ -784,31 +931,33 @@ function PortfolioTab({ positions, setPositions }) {
               </thead>
               <tbody>
                 {sortedPositions.map(pos => {
-                  const val = pos.quantity * pos.currentPrice;
-                  const pnl = (pos.currentPrice - pos.avgCost) * pos.quantity;
-                  const pnlPct = pos.avgCost > 0 ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
+                  const val     = pos.quantity * pos.currentPrice;
+                  const pnl     = (pos.currentPrice - pos.avgCost) * pos.quantity;
+                  const pnlPct  = pos.avgCost > 0 ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
                   const allocPct = totalValue > 0 ? (val / totalValue) * 100 : 0;
+                  const posType  = pos.assetType || inferAssetType(pos.bucket);
+                  const meta     = ASSET_TYPE_META[posType] || ASSET_TYPE_META.Security;
                   return (
                     <tr key={pos.id} onDoubleClick={() => setEditPos(pos)} style={{ cursor: 'default' }}>
                       <td style={S.td}>
-                        <div style={{ fontWeight: 700, color: '#f1f5f9' }}>{pos.ticker}</div>
+                        <div style={{ fontWeight: 700, color: '#f1f5f9' }}>{meta.icon} {pos.ticker}</div>
                         {pos.name && <div style={{ fontSize: 10, color: '#64748b' }}>{pos.name}</div>}
                       </td>
                       <td style={S.td}>
-                        <span style={S.tag(BUCKET_COLORS[pos.bucket] || '#d4a843')}>{pos.bucket}</span>
+                        <span style={S.tag(getBucketColor(buckets, pos.bucket))}>{pos.bucket}</span>
                         {pos.subBucket && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{pos.subBucket}</div>}
                       </td>
                       <td style={S.td}><strong>{fmt$(val, 0)}</strong></td>
                       <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{pnl >= 0 ? '+' : ''}{fmt$(pnl, 0)}</td>
                       <td style={{ ...S.td, ...(pnlPct >= 0 ? S.pnlPos : S.pnlNeg) }}>{fmtPct(pnlPct)}</td>
                       <td style={S.td}>{allocPct.toFixed(1)}%</td>
-                      <td style={{ ...S.td, fontSize: 11, color: '#64748b' }}>
-                        {pos.quantity} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
+                      <td style={{ ...S.td, fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+                        {pos.quantity} {meta.qtyUnit} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
                       </td>
                       <td style={S.td}>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11 }} onClick={() => setEditPos(pos)}>Edit</button>
-                          <button style={S.btnDanger} onClick={() => handleDelete(pos.id)}>&#10005;</button>
+                          <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11, minHeight: 32 }} onClick={() => setEditPos(pos)}>Edit</button>
+                          <button style={{ ...S.btnDanger, minHeight: 32 }} onClick={() => handleDelete(pos.id)}>&#10005;</button>
                         </div>
                       </td>
                     </tr>
@@ -833,24 +982,49 @@ function PortfolioTab({ positions, setPositions }) {
       )}
 
       {(showAdd || editPos) && (
-        <AddPositionModal position={editPos} onSave={handleSave} onClose={() => { setShowAdd(false); setEditPos(null); }} />
+        <AddPositionModal
+          position={editPos}
+          buckets={buckets}
+          setBuckets={setBuckets}
+          onSave={handleSave}
+          onClose={() => { setShowAdd(false); setEditPos(null); }}
+        />
       )}
     </div>
   );
 }
 
 // ─── Add Position Modal ────────────────────────────────────────────────────────
-function AddPositionModal({ position, onSave, onClose }) {
-  const [ticker, setTicker]           = useState(position?.ticker       || '');
-  const [name, setName]               = useState(position?.name         || '');
-  const [bucket, setBucket]           = useState(position?.bucket       || 'QQQ');
-  const [subBucket, setSubBucket]     = useState(position?.subBucket    || '');
-  const [quantity, setQuantity]       = useState(position?.quantity     != null ? String(position.quantity)     : '');
-  const [avgCost, setAvgCost]         = useState(position?.avgCost      != null ? String(position.avgCost)      : '');
-  const [currentPrice, setCurrentPrice] = useState(position?.currentPrice != null ? String(position.currentPrice) : '');
+function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
+  const isMobile = useIsMobile();
+  const defaultBucket = position?.bucket || buckets[0]?.name || '';
+
+  const [ticker,         setTicker]         = useState(position?.ticker       || '');
+  const [name,           setName]           = useState(position?.name         || '');
+  const [bucket,         setBucket]         = useState(defaultBucket);
+  const [subBucket,      setSubBucket]      = useState(position?.subBucket    || '');
+  const [quantity,       setQuantity]       = useState(position?.quantity     != null ? String(position.quantity)     : '');
+  const [avgCost,        setAvgCost]        = useState(position?.avgCost      != null ? String(position.avgCost)      : '');
+  const [currentPrice,   setCurrentPrice]   = useState(position?.currentPrice != null ? String(position.currentPrice) : '');
+  const [assetType,      setAssetType]      = useState(position?.assetType    || inferAssetType(defaultBucket));
+  const [creatingBucket, setCreatingBucket] = useState(false);
+  const [newBucketName,  setNewBucketName]  = useState('');
+  const [newBucketColor, setNewBucketColor] = useState(BUCKET_COLOR_PALETTE[0]);
   const tickerRef = useRef(null);
 
   useEffect(() => { if (!position && tickerRef.current) tickerRef.current.focus(); }, [position]);
+
+  // Auto-infer asset type when bucket changes (only for new positions)
+  const prevBucket = useRef(bucket);
+  useEffect(() => {
+    if (!position && bucket !== prevBucket.current) {
+      setAssetType(inferAssetType(bucket));
+      prevBucket.current = bucket;
+    }
+  }, [bucket, position]);
+
+  const isCryptoBucket = bucket.toLowerCase().includes('crypto');
+  const meta = ASSET_TYPE_META[assetType] || ASSET_TYPE_META['Security'];
 
   const qty = parseFloat(quantity);
   const avg = parseFloat(avgCost);
@@ -859,12 +1033,31 @@ function AddPositionModal({ position, onSave, onClose }) {
   const liveVal = canSave ? qty * cur : null;
   const livePnl = canSave ? (cur - avg) * qty : null;
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSave({ ...position, ticker: ticker.trim().toUpperCase(), name: name.trim(), bucket, subBucket: bucket === 'Crypto' ? subBucket : '', quantity: qty, avgCost: avg, currentPrice: cur });
+  const commitNewBucket = () => {
+    if (!newBucketName.trim()) return;
+    const nb = { id: genId(), name: newBucketName.trim(), color: newBucketColor };
+    setBuckets(p => [...p, nb]);
+    setBucket(nb.name);
+    setCreatingBucket(false);
+    setNewBucketName('');
   };
 
-  const field = (label, val, set, extra = {}) => (
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      ...position,
+      ticker:       ticker.trim().toUpperCase(),
+      name:         name.trim(),
+      bucket,
+      subBucket:    isCryptoBucket ? subBucket : '',
+      assetType,
+      quantity:     qty,
+      avgCost:      avg,
+      currentPrice: cur,
+    });
+  };
+
+  const fld = (label, val, set, extra = {}) => (
     <div style={{ marginBottom: 12 }}>
       <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>{label}</label>
       <input value={val} onChange={e => set(e.target.value)} style={S.inputStyle} {...extra} />
@@ -873,25 +1066,65 @@ function AddPositionModal({ position, onSave, onClose }) {
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 460, margin: isMobile ? '0 12px' : undefined }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 16 }}>
           {position ? 'Edit Position' : 'Add Position'}
         </div>
 
-        <div style={S.grid2}>
-          <div>{field('Ticker *', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'QQQ', ref: tickerRef })}</div>
-          <div>{field('Name / Label', name, setName, { placeholder: 'Invesco QQQ Trust' })}</div>
-        </div>
-
+        {/* ── Bucket selector ── */}
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Bucket *</label>
-          <select value={bucket} onChange={e => setBucket(e.target.value)} style={S.selectStyle}>
-            {Object.keys(ALLOCATION_TARGETS).map(b => <option key={b} value={b}>{b} (target {ALLOCATION_TARGETS[b]}%)</option>)}
-          </select>
+          {!creatingBucket ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={bucket} onChange={e => { if (e.target.value === '__new__') setCreatingBucket(true); else setBucket(e.target.value); }} style={{ ...S.selectStyle, flex: 1 }}>
+                {buckets.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                <option value="__new__">+ Create new bucket…</option>
+              </select>
+              <div style={{ width: 28, height: 36, borderRadius: 6, background: getBucketColor(buckets, bucket), flexShrink: 0 }} />
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input autoFocus value={newBucketName} onChange={e => setNewBucketName(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitNewBucket()} placeholder="Bucket name" style={{ ...S.inputStyle, flex: 1 }} />
+                <button style={{ ...S.btn, padding: '9px 14px', flexShrink: 0, minHeight: 40 }} onClick={commitNewBucket}>Add</button>
+                <button style={{ ...S.btnGhost, padding: '9px 12px', flexShrink: 0, minHeight: 40 }} onClick={() => setCreatingBucket(false)}>✕</button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {BUCKET_COLOR_PALETTE.map(c => (
+                  <div key={c} onClick={() => setNewBucketColor(c)} style={{ width: 24, height: 24, borderRadius: 4, background: c, cursor: 'pointer', border: `2px solid ${newBucketColor === c ? '#fff' : 'transparent'}` }} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {bucket === 'Crypto' && (
+        {/* ── Asset type ── */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Asset Type</label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {Object.entries(ASSET_TYPE_META).map(([type, m]) => (
+              <button key={type} onClick={() => setAssetType(type)} style={{
+                flex: 1, minWidth: 80, padding: '7px 6px', borderRadius: 7, minHeight: 40,
+                border: `1px solid ${assetType === type ? '#d4a843' : '#2d3748'}`,
+                background: assetType === type ? 'rgba(212,168,67,0.1)' : '#0f1117',
+                color: assetType === type ? '#d4a843' : '#64748b',
+                fontSize: 12, cursor: 'pointer',
+              }}>
+                {m.icon} {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Ticker + Name ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+          <div>{fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'QQQ', ref: tickerRef })}</div>
+          <div>{fld('Name / Label', name, setName, { placeholder: 'Invesco QQQ Trust' })}</div>
+        </div>
+
+        {/* ── Crypto sub-bucket ── */}
+        {isCryptoBucket && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Sub-Bucket</label>
             <select value={subBucket} onChange={e => setSubBucket(e.target.value)} style={S.selectStyle}>
@@ -901,10 +1134,11 @@ function AddPositionModal({ position, onSave, onClose }) {
           </div>
         )}
 
-        <div style={S.grid3}>
-          <div>{field('Quantity *', quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}</div>
-          <div>{field('Avg Cost *', avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
-          <div>{field('Current Price *', currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
+        {/* ── Numeric fields ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10 }}>
+          <div>{fld(`Quantity (${meta.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}</div>
+          <div>{fld(`Avg Cost (${meta.priceUnit}) *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
+          <div>{fld(`Cur. Price (${meta.priceUnit}) *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
         </div>
 
         {canSave && (
@@ -915,8 +1149,8 @@ function AddPositionModal({ position, onSave, onClose }) {
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{ ...S.btnGhost, flex: 1 }} onClick={onClose}>Cancel</button>
-          <button style={{ ...S.btn, flex: 2, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }} onClick={handleSave} disabled={!canSave}>
+          <button style={{ ...S.btnGhost, flex: 1, minHeight: 44 }} onClick={onClose}>Cancel</button>
+          <button style={{ ...S.btn, flex: 2, minHeight: 44, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }} onClick={handleSave} disabled={!canSave}>
             {position ? 'Save Changes' : 'Add Position'}
           </button>
         </div>
@@ -927,6 +1161,7 @@ function AddPositionModal({ position, onSave, onClose }) {
 
 // ─── Spending Tab ──────────────────────────────────────────────────────────────
 function SpendingTab({ expenses, setExpenses }) {
+  const isMobile = useIsMobile();
   const [showAdd, setShowAdd] = useState(false);
   const [viewMonth, setViewMonth] = useState(CURRENT_MONTH);
 
@@ -960,10 +1195,10 @@ function SpendingTab({ expenses, setExpenses }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Spending Tracker</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select value={viewMonth} onChange={e => setViewMonth(e.target.value)} style={{ ...S.selectStyle, width: 'auto', minWidth: 170 }}>
+      <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 20, gap: 10 }}>
+        <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 800, color: '#f1f5f9' }}>Spending Tracker</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
+          <select value={viewMonth} onChange={e => setViewMonth(e.target.value)} style={{ ...S.selectStyle, width: isMobile ? '1fr' : 'auto', flex: isMobile ? 1 : undefined, minWidth: 170 }}>
             {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
           </select>
           <button style={S.btn} onClick={() => setShowAdd(true)}>+ Add</button>
@@ -997,7 +1232,7 @@ function SpendingTab({ expenses, setExpenses }) {
       )}
 
       {/* ── Category totals + transaction list ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: 16, alignItems: 'start' }}>
         <div style={S.card}>
           <div style={S.cardTitle}>By Category</div>
           {byCategory.length === 0 ? (

@@ -462,6 +462,7 @@ export default function App() {
     { id: 'networth',  label: 'Net Worth' },
     { id: 'tithe',     label: 'Tithe'     },
     { id: 'roadmap',   label: 'Roadmap'   },
+    { id: 'scanner',   label: 'AI Scanner'},
   ];
 
   if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />;
@@ -495,6 +496,7 @@ export default function App() {
         )}
         {tab === 'tithe'    && <TitheTab   givingEntries={givingEntries} setGivingEntries={setGivingEntries} />}
         {tab === 'roadmap'  && <RoadmapTab roadmapSavings={roadmapSavings} setRoadmapSavings={setRoadmapSavings} portfolioValue={totalValue} />}
+        {tab === 'scanner'  && <ScannerTab />}
       </main>
     </div>
   );
@@ -1822,6 +1824,472 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── AI Market Scanner ─────────────────────────────────────────────────────────
+const SCAN_TYPES = [
+  { id: 'regime',      label: 'Market Regime'    },
+  { id: 'crypto',      label: 'Crypto Movers'    },
+  { id: 'commodities', label: 'Commodities'       },
+  { id: 'dividends',   label: 'Dividend Picks'   },
+  { id: 'quantum',     label: 'Quantum/Emerging' },
+  { id: 'sectors',     label: 'Sector Sweep'     },
+  { id: 'custom',      label: 'Custom Query'     },
+];
+
+const DIR_META = {
+  bullish: { icon: '▲', color: '#22c55e', border: '#22c55e' },
+  bearish: { icon: '▼', color: '#ef4444', border: '#ef4444' },
+  neutral: { icon: '◆', color: '#d4a843', border: '#d4a843' },
+};
+
+const CONF_COLORS = { High: '#4ecb71', Medium: '#d4a843', Low: '#e05555' };
+
+const REGIME_COLORS = {
+  'Risk-On':    '#22c55e',
+  'Risk-Off':   '#ef4444',
+  'Transition': '#d4a843',
+  'Crisis':     '#e05555',
+};
+
+const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace";
+
+function fmtTs(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function SignalCard({ signal, inWatchlist, onToggleWatch }) {
+  const dir = DIR_META[signal.direction] || DIR_META.neutral;
+  const confColor = CONF_COLORS[signal.confidence] || '#d4a843';
+  return (
+    <div style={{
+      background: '#14161c',
+      border: '1px solid #1e2535',
+      borderLeft: `3px solid ${dir.border}`,
+      borderRadius: 10,
+      padding: '14px 16px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: dir.color }}>
+            {dir.icon}
+          </span>
+          <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#f1f5f9', letterSpacing: '0.5px' }}>
+            {signal.ticker}
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+            background: confColor + '22', color: confColor, letterSpacing: '0.5px',
+          }}>
+            {signal.confidence}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            fontSize: 11, padding: '2px 8px', borderRadius: 4,
+            background: '#1e2535', color: '#94a3b8',
+          }}>
+            {signal.sector}
+          </span>
+          <button
+            onClick={() => onToggleWatch(signal.ticker)}
+            title={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            style={{
+              background: inWatchlist ? 'rgba(212,168,67,0.15)' : 'transparent',
+              border: `1px solid ${inWatchlist ? '#d4a843' : '#2d3748'}`,
+              borderRadius: 6,
+              color: inWatchlist ? '#d4a843' : '#64748b',
+              fontSize: 13,
+              cursor: 'pointer',
+              padding: '2px 7px',
+              lineHeight: 1.4,
+            }}
+          >
+            {inWatchlist ? '★' : '☆'}
+          </button>
+        </div>
+      </div>
+      {/* Reasoning */}
+      <div style={{ fontFamily: MONO, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+        {signal.reasoning}
+      </div>
+    </div>
+  );
+}
+
+function ScannerTab() {
+  const [scanType,    setScanType]    = useState('regime');
+  const [customQuery, setCustomQuery] = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [result,      setResult]      = useState(null);
+  const [panel,       setPanel]       = useState('scan'); // 'scan' | 'history' | 'watchlist'
+  const [scans,       setScans]       = useLocalStorage('mag_scans',     []);
+  const [watchlist,   setWatchlist]   = useLocalStorage('mag_watchlist', []);
+
+  const runScan = useCallback(async () => {
+    if (loading) return;
+    if (scanType === 'custom' && !customQuery.trim()) {
+      setError('Enter a custom query before scanning.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const res = await fetch('/api/scanner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scanType,
+          customQuery: scanType === 'custom' ? customQuery.trim() : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Scan failed');
+      setResult(data);
+      setPanel('scan');
+      setScans(prev => {
+        const entry = { ...data, scanType, id: Date.now() };
+        return [entry, ...prev].slice(0, 10);
+      });
+    } catch (e) {
+      setError(e.message || 'Scan failed — check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, scanType, customQuery, setScans]);
+
+  const toggleWatch = useCallback((ticker) => {
+    setWatchlist(prev =>
+      prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]
+    );
+  }, [setWatchlist]);
+
+  const loadHistory = useCallback((scan) => {
+    setResult(scan);
+    setPanel('scan');
+  }, []);
+
+  const regimeColor = result ? (REGIME_COLORS[result.regime] || '#d4a843') : '#d4a843';
+
+  return (
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px' }}>
+      {/* JetBrains Mono import */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');`}</style>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: '#64748b', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>
+          Phase 3
+        </div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>AI Market Scanner</h2>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+          Powered by Claude · Seven-bucket regime analysis
+        </div>
+      </div>
+
+      {/* Panel tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {[
+          { id: 'scan',      label: 'Scanner'  },
+          { id: 'history',   label: `History (${scans.length})`  },
+          { id: 'watchlist', label: `Watchlist (${watchlist.length})` },
+        ].map(p => (
+          <button key={p.id} onClick={() => setPanel(p.id)} style={{
+            fontFamily: MONO,
+            fontSize: 12,
+            padding: '6px 14px',
+            borderRadius: 6,
+            border: `1px solid ${panel === p.id ? '#d4a843' : '#2d3748'}`,
+            background: panel === p.id ? 'rgba(212,168,67,0.1)' : 'transparent',
+            color: panel === p.id ? '#d4a843' : '#64748b',
+            cursor: 'pointer',
+          }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── SCAN PANEL ── */}
+      {panel === 'scan' && (
+        <div>
+          {/* Scan type buttons */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {SCAN_TYPES.map(st => (
+              <button key={st.id} onClick={() => setScanType(st.id)} style={{
+                fontFamily: MONO,
+                fontSize: 12,
+                padding: '7px 14px',
+                borderRadius: 6,
+                border: `1px solid ${scanType === st.id ? '#d4a843' : '#2d3748'}`,
+                background: scanType === st.id ? 'rgba(212,168,67,0.12)' : '#14161c',
+                color: scanType === st.id ? '#d4a843' : '#94a3b8',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}>
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom query input */}
+          {scanType === 'custom' && (
+            <textarea
+              value={customQuery}
+              onChange={e => setCustomQuery(e.target.value)}
+              placeholder="Ask anything about current markets, your portfolio, or specific assets..."
+              rows={3}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: '#14161c',
+                border: '1px solid #2d3748',
+                borderRadius: 8,
+                color: '#f1f5f9',
+                fontFamily: MONO,
+                fontSize: 13,
+                padding: '10px 14px',
+                resize: 'vertical',
+                outline: 'none',
+                marginBottom: 12,
+              }}
+            />
+          )}
+
+          {/* Run button */}
+          <button
+            onClick={runScan}
+            disabled={loading}
+            style={{
+              fontFamily: MONO,
+              fontWeight: 700,
+              fontSize: 13,
+              padding: '10px 28px',
+              borderRadius: 8,
+              border: 'none',
+              background: loading ? '#1e2535' : '#d4a843',
+              color: loading ? '#64748b' : '#0a0d14',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s',
+              animation: loading ? 'scanPulse 1.2s ease-in-out infinite' : 'none',
+              marginBottom: 20,
+            }}
+          >
+            {loading ? '⟳ Scanning Markets...' : '▶ Run Scan'}
+          </button>
+
+          <style>{`
+            @keyframes scanPulse {
+              0%, 100% { opacity: 1; }
+              50%       { opacity: 0.5; }
+            }
+          `}</style>
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 8, marginBottom: 16,
+              background: 'rgba(224,85,85,0.1)', border: '1px solid rgba(224,85,85,0.3)',
+              color: '#e05555', fontFamily: MONO, fontSize: 13,
+            }}>
+              ✕ {error}
+            </div>
+          )}
+
+          {/* Results */}
+          {result && (
+            <div>
+              {/* Summary banner */}
+              <div style={{
+                background: '#14161c',
+                border: '1px solid #1e2535',
+                borderTop: `3px solid ${regimeColor}`,
+                borderRadius: 10,
+                padding: '16px 20px',
+                marginBottom: 20,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <span style={{
+                    fontFamily: MONO, fontSize: 12, fontWeight: 700,
+                    padding: '3px 10px', borderRadius: 4,
+                    background: regimeColor + '22', color: regimeColor,
+                    letterSpacing: '0.5px',
+                  }}>
+                    {result.regime}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#64748b' }}>
+                    {fmtTs(result.timestamp)}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>
+                    {result.signals.length} signals
+                  </span>
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 13, color: '#cbd5e1', lineHeight: 1.7 }}>
+                  {result.summary}
+                </div>
+              </div>
+
+              {/* Signal cards grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                {result.signals.map((sig, i) => (
+                  <SignalCard
+                    key={i}
+                    signal={sig}
+                    inWatchlist={watchlist.includes(sig.ticker)}
+                    onToggleWatch={toggleWatch}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!result && !loading && !error && (
+            <div style={{
+              textAlign: 'center', padding: '60px 20px',
+              color: '#334155', fontFamily: MONO, fontSize: 13,
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>◈</div>
+              Select a scan type and run a scan to see AI-generated market signals.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── HISTORY PANEL ── */}
+      {panel === 'history' && (
+        <div>
+          {scans.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#334155', fontFamily: MONO, fontSize: 13 }}>
+              No scan history yet. Run your first scan.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {scans.map((scan) => {
+                const rc = REGIME_COLORS[scan.regime] || '#d4a843';
+                return (
+                  <div
+                    key={scan.id}
+                    onClick={() => loadHistory(scan)}
+                    style={{
+                      background: '#14161c',
+                      border: '1px solid #1e2535',
+                      borderLeft: `3px solid ${rc}`,
+                      borderRadius: 10,
+                      padding: '14px 16px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{
+                          fontFamily: MONO, fontSize: 11, fontWeight: 700,
+                          padding: '2px 8px', borderRadius: 4,
+                          background: rc + '22', color: rc,
+                        }}>
+                          {scan.regime}
+                        </span>
+                        <span style={{ fontFamily: MONO, fontSize: 12, color: '#94a3b8' }}>
+                          {SCAN_TYPES.find(s => s.id === scan.scanType)?.label || scan.scanType}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: MONO, fontSize: 12, color: '#64748b' }}>
+                        {scan.signals.length} signals · {fmtTs(scan.timestamp)}
+                      </div>
+                    </div>
+                    <span style={{ color: '#334155', fontSize: 16 }}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {scans.length > 0 && (
+            <button
+              onClick={() => setScans([])}
+              style={{
+                marginTop: 16, fontFamily: MONO, fontSize: 12,
+                padding: '6px 14px', borderRadius: 6,
+                border: '1px solid #2d3748', background: 'transparent',
+                color: '#64748b', cursor: 'pointer',
+              }}
+            >
+              Clear History
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── WATCHLIST PANEL ── */}
+      {panel === 'watchlist' && (
+        <div>
+          {watchlist.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#334155', fontFamily: MONO, fontSize: 13 }}>
+              No tickers saved. Click ☆ on any signal card to add it to your watchlist.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {watchlist.map(ticker => (
+                <div key={ticker} style={{
+                  background: '#14161c',
+                  border: '1px solid #2d3748',
+                  borderRadius: 8,
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#d4a843' }}>
+                    {ticker}
+                  </span>
+                  <button
+                    onClick={() => toggleWatch(ticker)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                    title="Remove from watchlist"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {watchlist.length > 0 && (
+            <button
+              onClick={() => setWatchlist([])}
+              style={{
+                marginTop: 16, fontFamily: MONO, fontSize: 12,
+                padding: '6px 14px', borderRadius: 6,
+                border: '1px solid #2d3748', background: 'transparent',
+                color: '#64748b', cursor: 'pointer',
+              }}
+            >
+              Clear Watchlist
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

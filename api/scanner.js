@@ -57,11 +57,15 @@ export default async function handler(req, res) {
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
-    const raw = msg.content[0].text.trim();
+    // With web_search enabled, content may include tool_use blocks before the final text block
+    const textBlock = msg.content.filter(b => b.type === 'text').pop();
+    if (!textBlock) throw new Error('No text response from model');
+    const raw = textBlock.text.trim();
     // Strip any accidental code fences
     const jsonStr = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
     const data = JSON.parse(jsonStr);

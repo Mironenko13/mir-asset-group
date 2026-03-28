@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+  AreaChart, Area, ReferenceLine,
 } from 'recharts';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -50,6 +51,33 @@ const CAT_COLORS = {
 };
 
 const CRYPTO_SUB_BUCKETS = ['XRP', 'WLFI', 'BTC', 'Solana', 'XLM', 'HBAR', 'Other'];
+
+// ─── Net Worth Categories ──────────────────────────────────────────────────────
+const NW_CATEGORIES = ['liquidInvestments', 'crypto', 'metals', 'cash', 'businessEquity', 'realEstate'];
+const NW_COLORS = {
+  liquidInvestments: '#6366f1',
+  crypto:            '#f97316',
+  metals:            '#d4a843',
+  cash:              '#22c55e',
+  businessEquity:    '#8b5cf6',
+  realEstate:        '#ef4444',
+};
+const NW_LABELS = {
+  liquidInvestments: 'Liquid Investments',
+  crypto:            'Crypto',
+  metals:            'Metals',
+  cash:              'Cash',
+  businessEquity:    'Business Equity',
+  realEstate:        'Real Estate',
+};
+
+// ─── Asset Acquisition Roadmap ─────────────────────────────────────────────────
+const ROADMAP_MILESTONES = [
+  { id: 'skidsteer', label: 'Skid Steer / Equipment Rental', icon: '🏗', minCost: 25000,  maxCost: 40000,  color: '#f97316', description: 'Used equipment for rental to homeowners & contractors' },
+  { id: 'butcher',   label: 'Butcher Shop',                  icon: '🥩', minCost: 80000,  maxCost: 120000, color: '#ef4444', description: 'Community butcher suited to Mennonite market' },
+  { id: 'rental',    label: 'Rental Properties',             icon: '🏠', minCost: 150000, maxCost: 200000, color: '#6366f1', description: 'Union County, PA residential rental' },
+  { id: 'land',      label: 'Land (Long-Term Hold)',          icon: '🌾', minCost: 100000, maxCost: 200000, color: '#22c55e', description: 'Land acquisition for long-term appreciation' },
+];
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const S = {
@@ -303,20 +331,29 @@ function calcDriftAlerts(alloc) {
 // ─── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('dashboard');
-  const [positions, setPositions] = useLocalStorage('mag_positions', []);
-  const [expenses, setExpenses] = useLocalStorage('mag_expenses', []);
+  const [positions,     setPositions]     = useLocalStorage('mag_positions',       []);
+  const [expenses,      setExpenses]      = useLocalStorage('mag_expenses',        []);
+  const [nwSnapshots,   setNwSnapshots]   = useLocalStorage('mag_nw_snapshots',    []);
+  const [nwMilestones,  setNwMilestones]  = useLocalStorage('mag_nw_milestones',   []);
+  const [givingEntries, setGivingEntries] = useLocalStorage('mag_giving',          []);
+  const [roadmapSavings,setRoadmapSavings]= useLocalStorage('mag_roadmap_savings', {});
+
+  const { totalValue } = useMemo(() => portfolioStats(positions), [positions]);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'spending',  label: 'Spending'  },
+    { id: 'networth',  label: 'Net Worth' },
+    { id: 'tithe',     label: 'Tithe'     },
+    { id: 'roadmap',   label: 'Roadmap'   },
   ];
 
   return (
     <div style={S.app}>
       <header style={S.header}>
         <div style={S.logo}>&#9670; Mir Asset Group</div>
-        <nav style={S.nav}>
+        <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
           {tabs.map(t => (
             <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => setTab(t.id)}>{t.label}</button>
           ))}
@@ -333,6 +370,14 @@ export default function App() {
         )}
         {tab === 'portfolio' && <PortfolioTab positions={positions} setPositions={setPositions} />}
         {tab === 'spending'  && <SpendingTab  expenses={expenses}  setExpenses={setExpenses}   />}
+        {tab === 'networth'  && (
+          <NetWorthTab
+            snapshots={nwSnapshots}   setSnapshots={setNwSnapshots}
+            milestones={nwMilestones} setMilestones={setNwMilestones}
+          />
+        )}
+        {tab === 'tithe'    && <TitheTab   givingEntries={givingEntries} setGivingEntries={setGivingEntries} />}
+        {tab === 'roadmap'  && <RoadmapTab roadmapSavings={roadmapSavings} setRoadmapSavings={setRoadmapSavings} portfolioValue={totalValue} />}
       </main>
     </div>
   );
@@ -958,6 +1003,707 @@ function AddExpenseModal({ onSave, onClose }) {
             Log Expense
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Net Worth Tab ─────────────────────────────────────────────────────────────
+function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
+  const [showSnapshot, setShowSnapshot] = useState(false);
+  const [editSnapshot, setEditSnapshot] = useState(null);
+  const [showMilestone, setShowMilestone] = useState(false);
+  const [editMilestone, setEditMilestone] = useState(null);
+
+  const chartData = useMemo(() => {
+    return [...snapshots]
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map(s => ({
+        month: s.month,
+        ...NW_CATEGORIES.reduce((acc, cat) => { acc[cat] = s[cat] || 0; return acc; }, {}),
+        total: NW_CATEGORIES.reduce((sum, cat) => sum + (s[cat] || 0), 0),
+      }));
+  }, [snapshots]);
+
+  const latest = chartData[chartData.length - 1];
+  const prev   = chartData[chartData.length - 2];
+  const latestTotal = latest ? latest.total : 0;
+  const prevTotal   = prev   ? prev.total   : 0;
+  const momChange   = latestTotal - prevTotal;
+  const momPct      = prevTotal > 0 ? (momChange / prevTotal) * 100 : 0;
+
+  const fmtMonth = (m) => {
+    if (!m) return '';
+    return new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  };
+
+  const handleSaveSnapshot = (s) => {
+    if (s.id) {
+      setSnapshots(p => p.map(x => x.id === s.id ? s : x));
+    } else {
+      setSnapshots(p => [{ ...s, id: genId() }, ...p.filter(x => x.month !== s.month)]);
+    }
+    setShowSnapshot(false);
+    setEditSnapshot(null);
+  };
+
+  const handleDeleteSnapshot = (id) => {
+    if (window.confirm('Delete this snapshot?')) setSnapshots(p => p.filter(x => x.id !== id));
+  };
+
+  const handleSaveMilestone = (m) => {
+    if (m.id) { setMilestones(p => p.map(x => x.id === m.id ? m : x)); }
+    else       { setMilestones(p => [...p, { ...m, id: genId() }]); }
+    setShowMilestone(false);
+    setEditMilestone(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Net Worth Over Time</div>
+          {chartData.length > 0 && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{chartData.length} monthly snapshot{chartData.length !== 1 ? 's' : ''}</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={S.btnGhost} onClick={() => setShowMilestone(true)}>+ Milestone</button>
+          <button style={S.btn} onClick={() => setShowSnapshot(true)}>+ Snapshot</button>
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <KpiCard label="Current Net Worth"   value={fmt$(latestTotal, 0)} accent="#d4a843" />
+        <KpiCard label="MoM Change"          value={fmt$(momChange, 0)} sub={fmtPct(momPct)} subColor={momChange >= 0 ? '#22c55e' : '#ef4444'} accent={momChange >= 0 ? '#22c55e' : '#ef4444'} />
+        <KpiCard label="Snapshots on File"   value={String(snapshots.length)} sub={latest ? `Latest: ${fmtMonth(latest.month)}` : 'None yet'} accent="#6366f1" />
+        <KpiCard label="Milestones"          value={String(milestones.length)} sub={`${milestones.filter(m => m.netWorth <= latestTotal).length} achieved`} accent="#8b5cf6" />
+      </div>
+
+      {/* Stacked area chart */}
+      {chartData.length === 0 ? (
+        <div style={{ ...S.card, textAlign: 'center', padding: '48px 20px', marginBottom: 20 }}>
+          <div style={{ fontSize: 40, marginBottom: 14 }}>&#128200;</div>
+          <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 18 }}>No snapshots yet. Add a monthly snapshot to start tracking your net worth over time.</div>
+          <button style={S.btn} onClick={() => setShowSnapshot(true)}>+ Add First Snapshot</button>
+        </div>
+      ) : (
+        <div style={{ ...S.card, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+            <div style={S.cardTitle}>Net Worth by Category (Stacked)</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px' }}>
+              {NW_CATEGORIES.map(cat => (
+                <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: NW_COLORS[cat], flexShrink: 0 }} />
+                  <span style={{ color: '#64748b' }}>{NW_LABELS[cat]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <defs>
+                {NW_CATEGORIES.map(cat => (
+                  <linearGradient key={cat} id={`nwg-${cat}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={NW_COLORS[cat]} stopOpacity={0.55} />
+                    <stop offset="95%" stopColor={NW_COLORS[cat]} stopOpacity={0.08} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
+              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{ fill: '#64748b', fontSize: 10 }} />
+              <YAxis tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v)} tick={{ fill: '#64748b', fontSize: 10 }} width={52} />
+              <RTooltip
+                formatter={(v, name) => [fmt$(v, 0), NW_LABELS[name] || name]}
+                labelFormatter={l => fmtMonth(l)}
+                contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }}
+              />
+              {NW_CATEGORIES.map(cat => (
+                <Area key={cat} type="monotone" dataKey={cat} stackId="nw"
+                  stroke={NW_COLORS[cat]} fill={`url(#nwg-${cat})`} strokeWidth={1.5} />
+              ))}
+              {milestones.map(m => (
+                <ReferenceLine key={m.id} y={m.netWorth} stroke="#d4a843" strokeDasharray="5 3"
+                  label={{ value: m.label, position: 'insideTopRight', fill: '#d4a843', fontSize: 9 }} />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Snapshot history + milestones */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={S.card}>
+          <div style={S.cardTitle}>Monthly Snapshots</div>
+          {snapshots.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#475569' }}>No snapshots yet</div>
+          ) : (
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>Month</th>
+                    <th style={S.th}>Total</th>
+                    <th style={S.th}>MoM</th>
+                    <th style={S.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...chartData].reverse().map((row, i, arr) => {
+                    const prevRow = arr[i + 1];
+                    const change  = prevRow ? row.total - prevRow.total : null;
+                    return (
+                      <tr key={row.month}>
+                        <td style={S.td}>{fmtMonth(row.month)}</td>
+                        <td style={{ ...S.td, fontWeight: 700, color: '#d4a843' }}>{fmt$(row.total, 0)}</td>
+                        <td style={{ ...S.td, fontSize: 11, color: change == null ? '#64748b' : change >= 0 ? '#22c55e' : '#ef4444' }}>
+                          {change == null ? '–' : (change >= 0 ? '+' : '') + fmt$(change, 0)}
+                        </td>
+                        <td style={S.td}>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button style={{ ...S.btnGhost, padding: '2px 7px', fontSize: 10 }} onClick={() => {
+                              const snap = snapshots.find(s => s.month === row.month);
+                              if (snap) setEditSnapshot(snap);
+                            }}>Edit</button>
+                            <button style={S.btnDanger} onClick={() => {
+                              const snap = snapshots.find(s => s.month === row.month);
+                              if (snap) handleDeleteSnapshot(snap.id);
+                            }}>&#10005;</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div style={S.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={S.cardTitle}>Milestone Markers</div>
+            <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11 }} onClick={() => setShowMilestone(true)}>+ Add</button>
+          </div>
+          {milestones.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#475569' }}>No milestones yet — add markers like &ldquo;First $50K&rdquo; to track on the chart</div>
+          ) : (
+            [...milestones].sort((a, b) => a.netWorth - b.netWorth).map(m => {
+              const achieved = m.netWorth <= latestTotal;
+              return (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid #0f1117' }}>
+                  <span style={{ fontSize: 14 }}>{achieved ? '✅' : '🎯'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: achieved ? '#22c55e' : '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>{fmt$(m.netWorth, 0)}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button style={{ ...S.btnGhost, padding: '2px 7px', fontSize: 10 }} onClick={() => setEditMilestone(m)}>Edit</button>
+                    <button style={S.btnDanger} onClick={() => setMilestones(p => p.filter(x => x.id !== m.id))}>&#10005;</button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {(showSnapshot || editSnapshot) && (
+        <AddSnapshotModal
+          snapshot={editSnapshot}
+          onSave={handleSaveSnapshot}
+          onClose={() => { setShowSnapshot(false); setEditSnapshot(null); }}
+        />
+      )}
+      {(showMilestone || editMilestone) && (
+        <AddMilestoneModal
+          milestone={editMilestone}
+          onSave={handleSaveMilestone}
+          onClose={() => { setShowMilestone(false); setEditMilestone(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Add Snapshot Modal ────────────────────────────────────────────────────────
+function AddSnapshotModal({ snapshot, onSave, onClose }) {
+  const initVals = useMemo(() => NW_CATEGORIES.reduce((acc, cat) => {
+    acc[cat] = snapshot?.[cat] != null ? String(snapshot[cat]) : '';
+    return acc;
+  }, {}), [snapshot]);
+
+  const [month,  setMonth]  = useState(snapshot?.month || CURRENT_MONTH);
+  const [values, setValues] = useState(initVals);
+
+  const total = NW_CATEGORIES.reduce((sum, cat) => sum + (parseFloat(values[cat]) || 0), 0);
+
+  const handleSave = () => {
+    onSave({
+      ...snapshot,
+      month,
+      ...NW_CATEGORIES.reduce((acc, cat) => { acc[cat] = parseFloat(values[cat]) || 0; return acc; }, {}),
+    });
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>
+          {snapshot ? 'Edit Snapshot' : 'Add Monthly Snapshot'}
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Month *</label>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={S.selectStyle} />
+        </div>
+
+        <div style={S.grid2}>
+          {NW_CATEGORIES.map(cat => (
+            <div key={cat} style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
+                <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: NW_COLORS[cat], marginRight: 5, verticalAlign: 'middle' }} />
+                <span style={{ color: '#94a3b8' }}>{NW_LABELS[cat]}</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={values[cat]}
+                onChange={e => setValues(p => ({ ...p, [cat]: e.target.value }))}
+                placeholder="0"
+                style={S.inputStyle}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: '#0f1117', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>Total Net Worth</span>
+          <strong style={{ color: '#d4a843', fontSize: 18 }}>{fmt$(total, 0)}</strong>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ ...S.btnGhost, flex: 1 }} onClick={onClose}>Cancel</button>
+          <button style={{ ...S.btn, flex: 2 }} onClick={handleSave}>
+            {snapshot ? 'Save Changes' : 'Add Snapshot'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Milestone Modal ───────────────────────────────────────────────────────
+function AddMilestoneModal({ milestone, onSave, onClose }) {
+  const [label,    setLabel]    = useState(milestone?.label    || '');
+  const [netWorth, setNetWorth] = useState(milestone?.netWorth != null ? String(milestone.netWorth) : '');
+
+  const canSave = label.trim() && netWorth !== '' && parseFloat(netWorth) > 0;
+  const SUGGESTIONS = ['First $50K', 'First $100K', 'First $250K', 'First $500K', 'Debt Free', 'Skid Steer Acquired', 'Butcher Shop Opened'];
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>
+          {milestone ? 'Edit Milestone' : 'Add Milestone'}
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Label *</label>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. First $50K" style={S.inputStyle} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+            {SUGGESTIONS.map(s => (
+              <button key={s} onClick={() => setLabel(s)}
+                style={{ padding: '2px 8px', background: '#1e2535', border: '1px solid #2d3748', borderRadius: 10, color: '#64748b', fontSize: 10, cursor: 'pointer' }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Net Worth Value *</label>
+          <input type="number" min="0" value={netWorth} onChange={e => setNetWorth(e.target.value)} placeholder="50000" style={S.inputStyle} />
+          <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>Appears as a dashed line on the chart when this NW value is reached</div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ ...S.btnGhost, flex: 1 }} onClick={onClose}>Cancel</button>
+          <button
+            style={{ ...S.btn, flex: 2, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }}
+            disabled={!canSave}
+            onClick={() => { if (canSave) onSave({ ...milestone, label: label.trim(), netWorth: parseFloat(netWorth) }); }}
+          >
+            {milestone ? 'Save' : 'Add Milestone'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tithe & Giving Tab ────────────────────────────────────────────────────────
+function TitheTab({ givingEntries, setGivingEntries }) {
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [viewYear,  setViewYear]  = useState(String(new Date().getFullYear()));
+
+  const currentYear  = String(new Date().getFullYear());
+  const currentMonth = new Date().getMonth(); // 0-based
+  const monthlyTarget = Math.round(MONTHLY_GROSS * TITHE_RATE);
+
+  const ytdEntries = useMemo(() =>
+    givingEntries.filter(e => e.date.startsWith(viewYear)),
+    [givingEntries, viewYear]
+  );
+  const ytdTotal   = useMemo(() => ytdEntries.reduce((s, e) => s + e.amount, 0), [ytdEntries]);
+  const ytdTarget  = monthlyTarget * (viewYear === currentYear ? currentMonth + 1 : 12);
+  const ytdVariance = ytdTotal - ytdTarget;
+
+  const monthlyData = useMemo(() => {
+    const data = [];
+    for (let m = 1; m <= 12; m++) {
+      const mStr   = `${viewYear}-${String(m).padStart(2, '0')}`;
+      const actual = givingEntries.filter(e => e.date.startsWith(mStr)).reduce((s, e) => s + e.amount, 0);
+      const label  = new Date(mStr + '-01').toLocaleDateString('en-US', { month: 'short' });
+      data.push({ month: label, target: monthlyTarget, actual: Math.round(actual) });
+    }
+    return data;
+  }, [givingEntries, viewYear, monthlyTarget]);
+
+  const byRecipient = useMemo(() => {
+    const map = {};
+    ytdEntries.forEach(e => { map[e.recipient || 'Unspecified'] = (map[e.recipient || 'Unspecified'] || 0) + e.amount; });
+    return Object.entries(map).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
+  }, [ytdEntries]);
+
+  const years = useMemo(() => {
+    const yr = new Date().getFullYear();
+    return [String(yr), String(yr - 1), String(yr - 2)];
+  }, []);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Tithe &amp; Giving</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={viewYear} onChange={e => setViewYear(e.target.value)} style={{ ...S.selectStyle, width: 'auto', minWidth: 80 }}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button style={S.btn} onClick={() => setShowAdd(true)}>+ Log Giving</button>
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <KpiCard label="YTD Given"        value={fmt$(ytdTotal, 0)} accent="#d4a843" />
+        <KpiCard label="YTD Target"       value={fmt$(ytdTarget, 0)} sub={`Through ${new Date().toLocaleDateString('en-US', { month: 'long' })}`} accent="#22c55e" />
+        <KpiCard label="Monthly Target"   value={fmt$(monthlyTarget, 0)} sub="10% of gross income" accent="#d4a843" />
+        <KpiCard label="YTD Variance"     value={fmt$(ytdVariance, 0)} subColor={ytdVariance >= 0 ? '#22c55e' : '#ef4444'} sub={ytdVariance >= 0 ? 'On track ✓' : 'Behind'} accent={ytdVariance >= 0 ? '#22c55e' : '#ef4444'} />
+      </div>
+
+      {/* Monthly bar chart */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={S.cardTitle}>Monthly Target vs Actual — {viewYear}</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
+            <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} />
+            <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => '$' + v} />
+            <RTooltip formatter={v => [fmt$(v, 0), '']} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Bar dataKey="target" fill="#2d3748" name="Target"  radius={[3, 3, 0, 0]} />
+            <Bar dataKey="actual" fill="#d4a843" name="Actual"  radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* By recipient + giving log */}
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16, alignItems: 'start' }}>
+        <div style={S.card}>
+          <div style={S.cardTitle}>By Recipient</div>
+          {byRecipient.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#475569' }}>No giving for {viewYear}</div>
+          ) : (
+            <>
+              {byRecipient.map(({ name, amount }) => (
+                <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #0f1117' }}>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{fmt$(amount, 0)}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 7, borderTop: '1px solid #334155', marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: '#64748b' }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#d4a843' }}>{fmt$(ytdTotal, 0)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={S.card}>
+          <div style={S.cardTitle}>Giving Log — {viewYear}</div>
+          {ytdEntries.length === 0 ? (
+            <div style={{ fontSize: 13, color: '#475569', padding: '12px 0' }}>
+              No giving logged for {viewYear}. Click <strong style={{ color: '#d4a843' }}>+ Log Giving</strong> to add an entry.
+            </div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+              {[...ytdEntries].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid #0f1117' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d4a843', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.recipient || '—'}</div>
+                    <div style={{ fontSize: 10, color: '#475569' }}>{e.note ? `${e.note} \u00b7 ` : ''}{e.date}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, color: '#d4a843', fontSize: 13, flexShrink: 0 }}>{fmt$(e.amount)}</div>
+                  <button style={S.btnDanger} onClick={() => setGivingEntries(p => p.filter(x => x.id !== e.id))}>&#10005;</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showAdd && (
+        <AddGivingModal
+          onSave={e => { setGivingEntries(p => [e, ...p]); setShowAdd(false); }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Add Giving Modal ──────────────────────────────────────────────────────────
+function AddGivingModal({ onSave, onClose }) {
+  const [amount,    setAmount]    = useState('');
+  const [recipient, setRecipient] = useState('');
+  const [note,      setNote]      = useState('');
+  const [date,      setDate]      = useState(TODAY_STR);
+  const amtRef = useRef(null);
+
+  useEffect(() => { if (amtRef.current) amtRef.current.focus(); }, []);
+
+  const canSave = amount !== '' && parseFloat(amount) > 0;
+  const RECIPIENTS = ['Church', 'Missions', 'Local Need', 'Food Bank', 'Family', 'Other'];
+
+  const handleSave = () => {
+    if (canSave) onSave({ id: genId(), amount: parseFloat(amount), recipient: recipient.trim(), note: note.trim(), date });
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+        <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>Log Giving</div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
+          <input ref={amtRef} type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave(); }}
+            placeholder="0.00" style={{ ...S.inputStyle, fontSize: 22, fontWeight: 700, color: '#d4a843' }} />
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Recipient</label>
+          <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Church, missions, local need…" style={S.inputStyle} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+            {RECIPIENTS.map(r => (
+              <button key={r} onClick={() => setRecipient(r)}
+                style={{ padding: '2px 8px', background: '#1e2535', border: '1px solid #2d3748', borderRadius: 10, color: '#64748b', fontSize: 10, cursor: 'pointer' }}>
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Note (optional)</label>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Purpose or details" style={S.inputStyle} />
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.selectStyle} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ ...S.btnGhost, flex: 1 }} onClick={onClose}>Cancel</button>
+          <button style={{ ...S.btn, flex: 2, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }}
+            disabled={!canSave} onClick={handleSave}>
+            Log Giving
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Asset Acquisition Roadmap Tab ─────────────────────────────────────────────
+function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
+  const [editingId, setEditingId] = useState(null);
+  const [editSaved, setEditSaved] = useState('');
+  const [editRate,  setEditRate]  = useState('');
+
+  const ltvPower = portfolioValue * 0.4;
+
+  const startEdit = (id) => {
+    const data = roadmapSavings[id] || {};
+    setEditSaved(data.saved != null ? String(data.saved) : '');
+    setEditRate(data.monthlyRate != null ? String(data.monthlyRate) : '');
+    setEditingId(id);
+  };
+
+  const commitEdit = (id) => {
+    setRoadmapSavings(prev => ({
+      ...prev,
+      [id]: { ...(prev[id] || {}), saved: parseFloat(editSaved) || 0, monthlyRate: parseFloat(editRate) || 0 },
+    }));
+    setEditingId(null);
+  };
+
+  const totalFundable = ROADMAP_MILESTONES.filter(m => {
+    const data = roadmapSavings[m.id] || {};
+    return (data.saved || 0) + ltvPower >= m.minCost;
+  }).length;
+
+  return (
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
+      <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>Funded via 40% LTV portfolio loans</div>
+
+      {/* LTV summary card */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <div style={S.cardTitle}>Portfolio Value</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>{fmt$(portfolioValue, 0)}</div>
+          </div>
+          <div style={{ fontSize: 24, color: '#334155' }}>&#215;</div>
+          <div>
+            <div style={S.cardTitle}>LTV Rate</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>40%</div>
+          </div>
+          <div style={{ fontSize: 24, color: '#334155' }}>=</div>
+          <div>
+            <div style={S.cardTitle}>Borrowing Power</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#d4a843' }}>{fmt$(ltvPower, 0)}</div>
+          </div>
+          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={S.cardTitle}>Milestones Fundable</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: totalFundable > 0 ? '#22c55e' : '#64748b' }}>
+              {totalFundable} / {ROADMAP_MILESTONES.length}
+            </div>
+          </div>
+        </div>
+        {portfolioValue === 0 && (
+          <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>
+            Add positions in the Portfolio tab to calculate your LTV borrowing power.
+          </div>
+        )}
+      </div>
+
+      {/* Milestone cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {ROADMAP_MILESTONES.map((milestone, idx) => {
+          const data         = roadmapSavings[milestone.id] || {};
+          const saved        = data.saved || 0;
+          const monthlyRate  = data.monthlyRate || 0;
+          const totalFunding = saved + ltvPower;
+          const fundable     = totalFunding >= milestone.minCost;
+          const totalFrac    = Math.min(totalFunding / milestone.maxCost, 1);
+          const isEditing    = editingId === milestone.id;
+
+          const shortfall = milestone.minCost - totalFunding;
+          const projMonths = !fundable && monthlyRate > 0 && shortfall > 0
+            ? Math.ceil(shortfall / monthlyRate)
+            : null;
+
+          return (
+            <div key={milestone.id} style={{ ...S.card, borderLeft: `3px solid ${milestone.color}` }}>
+              {/* Header row */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 30, lineHeight: 1, flexShrink: 0 }}>{milestone.icon}</div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>#{idx + 1}</span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>{milestone.label}</span>
+                    {fundable && <span style={S.tag('#22c55e')}>Fundable Now</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>{milestone.description}</div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Range</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>
+                    {fmt$(milestone.minCost, 0)} – {fmt$(milestone.maxCost, 0)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 5 }}>
+                  <span>Total Funding (Saved + LTV Borrow)</span>
+                  <span>{fmt$(totalFunding, 0)} / {fmt$(milestone.maxCost, 0)}</span>
+                </div>
+                <div style={{ height: 10, background: '#1e2535', borderRadius: 5, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${totalFrac * 100}%`,
+                    background: fundable
+                      ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                      : `linear-gradient(90deg, ${milestone.color}99, ${milestone.color})`,
+                    borderRadius: 5,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 5, fontSize: 10 }}>
+                  <span style={{ color: '#6366f1' }}>&#11044; LTV: {fmt$(ltvPower, 0)}</span>
+                  <span style={{ color: milestone.color }}>&#11044; Saved: {fmt$(saved, 0)}</span>
+                  {!fundable && <span style={{ color: '#ef4444' }}>Shortfall: {fmt$(Math.max(shortfall, 0), 0)}</span>}
+                </div>
+              </div>
+
+              {/* Edit row or stats row */}
+              {isEditing ? (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid #1e2535' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>Amount Saved ($)</label>
+                    <input type="number" min="0" value={editSaved} onChange={e => setEditSaved(e.target.value)} style={{ ...S.inputStyle, width: 130 }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>Monthly Savings Rate ($)</label>
+                    <input type="number" min="0" value={editRate} onChange={e => setEditRate(e.target.value)} style={{ ...S.inputStyle, width: 150 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button style={{ ...S.btn, padding: '8px 14px', fontSize: 12 }} onClick={() => commitEdit(milestone.id)}>Save</button>
+                    <button style={S.btnGhost} onClick={() => setEditingId(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 8, borderTop: '1px solid #1e2535' }}>
+                  <div style={{ display: 'flex', gap: 18, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
+                    <span>Saved: <strong style={{ color: '#f1f5f9' }}>{fmt$(saved, 0)}</strong></span>
+                    {monthlyRate > 0 && <span>Rate: <strong style={{ color: '#f1f5f9' }}>{fmt$(monthlyRate, 0)}/mo</strong></span>}
+                    {projMonths != null && <span>ETA: <strong style={{ color: '#d4a843' }}>~{projMonths} mo ({Math.ceil(projMonths / 12)}yr)</strong></span>}
+                    {fundable && <span style={{ color: '#22c55e', fontWeight: 700 }}>Ready to acquire!</span>}
+                  </div>
+                  <button style={{ ...S.btnGhost, padding: '5px 12px', fontSize: 11 }} onClick={() => startEdit(milestone.id)}>
+                    Update Savings
+                  </button>
+                </div>
+              )}
+
+              {/* Fundable alert */}
+              {fundable && (
+                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, fontSize: 12, color: '#22c55e' }}>
+                  &#9989; Saved + LTV power ({fmt$(totalFunding, 0)}) exceeds minimum target ({fmt$(milestone.minCost, 0)}). This milestone is fundable today.
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

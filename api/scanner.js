@@ -27,7 +27,8 @@ const SCAN_PROMPTS = {
   commodities: 'Analyze gold, silver, and energy/commodity plays. Give specific tickers, price levels, and macro drivers. Include any COMEX or COT positioning signals. Return 5-7 signals.',
   dividends:   'Recommend 3-5 high-quality dividend stocks for a blue-collar income portfolio. Include yield, payout ratio, dividend growth rate, and why each is a buy now. Return 3-5 signals.',
   quantum:     'Analyze quantum computing and emerging tech sector. Cover IonQ, D-Wave, Rigetti, QTUM ETF. Any new entrants? Current risk/reward assessment for speculative positions. Return 4-6 signals.',
-  sectors:     'Give a full eleven-sector sweep. For each sector: current outlook (bullish/bearish/neutral), top 1-2 actionable tickers, and key catalyst to watch. Return 11-14 signals covering all sectors.',
+  sectors:       'Give a full eleven-sector sweep. For each sector: current outlook (bullish/bearish/neutral), top 1-2 actionable tickers, and key catalyst to watch. Return 11-14 signals covering all sectors.',
+  global_session: 'Analyze what happened in the Asian and London sessions overnight. What moved? What are the key setups heading into the New York session? Focus on my portfolio holdings (QQQ, XRP, BTC, SOL, XLM, HBAR, gold, silver, energy/commodities) and the broader market. Include notable forex moves (DXY, EUR/USD, USD/JPY) that signal risk appetite. What is the pre-market tone and what levels matter most at the open? Return 6-10 signals.',
 };
 
 export default async function handler(req, res) {

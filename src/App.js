@@ -845,7 +845,7 @@ function PortfolioTab({ positions, setPositions, targets, setTargets }) {
   const [editingTarget, setEditingTarget] = useState(null);
   const [targetInput,   setTargetInput]   = useState('');
 
-  const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
+  const { totalValue, byBucket, alloc } = useMemo(() => portfolioStats(positions), [positions]);
   const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
   const totalCost = useMemo(() => positions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [positions]);
   const totalPnl = totalValue - totalCost;
@@ -941,16 +941,17 @@ function PortfolioTab({ positions, setPositions, targets, setTargets }) {
                 <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
-            {/* Bucket legend + target setter */}
+            {/* Asset class legend + target setter */}
             <div style={{ marginTop: 8 }}>
               {allBucketNames.map(name => {
                 const color = getAssetClassColor(name);
                 const tgt = targets[name];
                 return (
-                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid #0f1117', flexWrap: 'wrap' }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#9a9880', flex: 1 }}>{name}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#e8e4d8' }}>{(alloc[name] || 0).toFixed(1)}%</span>
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: `1px solid ${C.bgPrimary}`, flexWrap: 'wrap' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: C.textSec, flex: 1, minWidth: 90 }}>{name}</span>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{fmt$(byBucket[name] || 0, 0)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, minWidth: 36, textAlign: 'right' }}>{(alloc[name] || 0).toFixed(1)}%</span>
                     {editingTarget === name ? (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <input
@@ -1010,39 +1011,49 @@ function PortfolioTab({ positions, setPositions, targets, setTargets }) {
       ) : (
         <div style={S.card}>
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ ...S.table, minWidth: 600 }}>
+            <table style={{ ...S.table, minWidth: 680 }}>
               <thead>
                 <tr>
-                  {[['ticker','Ticker'],['assetClass','Asset Class'],['value','Value'],['pnl','P&L'],['pnlPct','P&L %'],['alloc','Alloc %']].map(([k, lbl]) => (
+                  {[['ticker','Ticker'],['assetClass','Class'],['value','Value'],['pnl','P&L'],['alloc','Alloc %']].map(([k, lbl]) => (
                     <th key={k} style={S.th} onClick={() => toggleSort(k)} dangerouslySetInnerHTML={{ __html: lbl + sortIcon(k) }} />
                   ))}
-                  <th style={{ ...S.th, cursor: 'default' }}>Qty / Avg / Price</th>
+                  <th style={{ ...S.th, cursor: 'default' }}>Qty</th>
+                  <th style={{ ...S.th, cursor: 'default' }}>Avg Cost</th>
+                  <th style={{ ...S.th, cursor: 'default' }}>Price</th>
                   <th style={{ ...S.th, cursor: 'default' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {sortedPositions.map(pos => {
-                  const val     = pos.quantity * pos.currentPrice;
-                  const pnl     = (pos.currentPrice - pos.avgCost) * pos.quantity;
-                  const pnlPct  = pos.avgCost > 0 ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
+                  const val      = pos.quantity * pos.currentPrice;
+                  const pnl      = pos.assetClass === 'Cash' ? 0 : (pos.currentPrice - pos.avgCost) * pos.quantity;
+                  const pnlPct   = pos.avgCost > 0 && pos.assetClass !== 'Cash' ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
                   const allocPct = totalValue > 0 ? (val / totalValue) * 100 : 0;
-                  const acMeta = ASSET_CLASSES.find(a => a.id === pos.assetClass) || ASSET_CLASSES[0];
+                  const acMeta   = ASSET_CLASSES.find(a => a.id === pos.assetClass) || ASSET_CLASSES[0];
                   return (
                     <tr key={pos.id} onDoubleClick={() => setEditPos(pos)} style={{ cursor: 'default' }}>
                       <td style={S.td}>
-                        <div style={{ fontWeight: 700, color: '#e8e4d8' }}>{acMeta.icon} {pos.ticker}</div>
-                        {pos.name && <div style={{ fontSize: 10, color: '#9a9880' }}>{pos.name}</div>}
+                        <div style={{ fontWeight: 700, color: C.textPrimary }}>{acMeta.icon} {pos.ticker}</div>
+                        {pos.name && <div style={{ fontSize: 10, color: C.textSec }}>{pos.name}</div>}
+                        {pos.sector && <div style={{ fontSize: 10, color: C.textMuted }}>{pos.sector}</div>}
                       </td>
                       <td style={S.td}>
                         <span style={S.tag(getAssetClassColor(pos.assetClass))}>{pos.assetClass}</span>
-                        {pos.sector && <div style={{ fontSize: 10, color: '#9a9880', marginTop: 2 }}>{pos.sector}</div>}
                       </td>
-                      <td style={S.td}><strong>{fmt$(val, 0)}</strong></td>
-                      <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{pnl >= 0 ? '+' : ''}{fmt$(pnl, 0)}</td>
-                      <td style={{ ...S.td, ...(pnlPct >= 0 ? S.pnlPos : S.pnlNeg) }}>{fmtPct(pnlPct)}</td>
+                      <td style={{ ...S.td, fontWeight: 700, color: C.gold }}>{fmt$(val, 0)}</td>
+                      <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>
+                        {pos.assetClass === 'Cash' ? '—' : (pnl >= 0 ? '+' : '') + fmt$(pnl, 0)}
+                        {pnlPct !== 0 && <div style={{ fontSize: 10 }}>{fmtPct(pnlPct)}</div>}
+                      </td>
                       <td style={S.td}>{allocPct.toFixed(1)}%</td>
-                      <td style={{ ...S.td, fontSize: 11, color: '#9a9880', whiteSpace: 'nowrap' }}>
-                        {pos.quantity} {acMeta.qtyUnit} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
+                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
+                        {pos.assetClass === 'Cash' ? fmt$(pos.quantity, 0) : `${pos.quantity} ${acMeta.qtyUnit}`}
+                      </td>
+                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
+                        {pos.assetClass === 'Cash' ? '—' : fmt$(pos.avgCost)}
+                      </td>
+                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
+                        {pos.assetClass === 'Cash' ? '—' : fmt$(pos.currentPrice)}
                       </td>
                       <td style={S.td}>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -1056,18 +1067,18 @@ function PortfolioTab({ positions, setPositions, targets, setTargets }) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: '#9a9880', fontSize: 11 }}>TOTAL ({positions.length})</td>
-                  <td style={{ ...S.td, fontWeight: 700, color: '#c9a84c' }}>{fmt$(totalValue, 0)}</td>
-                  <td style={{ ...S.td, ...(totalPnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{totalPnl >= 0 ? '+' : ''}{fmt$(totalPnl, 0)}</td>
+                  <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: C.textSec, fontSize: 11 }}>TOTAL ({positions.length})</td>
+                  <td style={{ ...S.td, fontWeight: 700, color: C.gold }}>{fmt$(totalValue, 0)}</td>
                   <td style={{ ...S.td, ...(totalPnl >= 0 ? S.pnlPos : S.pnlNeg) }}>
-                    {totalCost > 0 ? fmtPct((totalPnl / totalCost) * 100) : '–'}
+                    {totalPnl >= 0 ? '+' : ''}{fmt$(totalPnl, 0)}
+                    <div style={{ fontSize: 10 }}>{totalCost > 0 ? fmtPct((totalPnl / totalCost) * 100) : '–'}</div>
                   </td>
-                  <td colSpan={3} style={S.td}></td>
+                  <td colSpan={6} style={S.td}></td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <div style={{ marginTop: 8, fontSize: 10, color: '#2a4a3a' }}>Double-click a row to edit</div>
+          <div style={{ marginTop: 8, fontSize: 10, color: C.textMuted }}>Double-click a row to edit</div>
         </div>
       )}
 
@@ -1085,109 +1096,104 @@ function PortfolioTab({ positions, setPositions, targets, setTargets }) {
 // ─── Add Position Modal ────────────────────────────────────────────────────────
 function AddPositionModal({ position, onSave, onClose }) {
   const isMobile = useIsMobile();
-  const initPos = position ? migratePosition(position) : null;
+  const initPos  = position ? migratePosition(position) : null;
+  const initCash = initPos?.assetClass === 'Cash';
 
   const [assetClass,   setAssetClass]   = useState(initPos?.assetClass || 'Equities');
-  const [sector,       setSector]       = useState(initPos?.sector     || '');
   const [ticker,       setTicker]       = useState(initPos?.ticker       || '');
   const [name,         setName]         = useState(initPos?.name         || '');
-  const [quantity,     setQuantity]     = useState(initPos?.quantity     != null ? String(initPos.quantity)     : '');
-  const [avgCost,      setAvgCost]      = useState(initPos?.avgCost      != null ? String(initPos.avgCost)      : '');
-  const [currentPrice, setCurrentPrice] = useState(initPos?.currentPrice != null ? String(initPos.currentPrice) : '');
+  const [quantity,     setQuantity]     = useState(!initCash && initPos?.quantity     != null ? String(initPos.quantity)     : '');
+  const [avgCost,      setAvgCost]      = useState(!initCash && initPos?.avgCost      != null ? String(initPos.avgCost)      : '');
+  const [currentPrice, setCurrentPrice] = useState(!initCash && initPos?.currentPrice != null ? String(initPos.currentPrice) : '');
+  const [tag,          setTag]          = useState(initPos?.sector || '');
+  const [cashAmt,      setCashAmt]      = useState(initCash && initPos?.quantity != null ? String(initPos.quantity) : '');
   const tickerRef = useRef(null);
 
   useEffect(() => { if (!position && tickerRef.current) tickerRef.current.focus(); }, [position]);
 
-  const prevClass = useRef(assetClass);
-  useEffect(() => {
-    if (assetClass !== prevClass.current) {
-      setSector('');
-      prevClass.current = assetClass;
-    }
-  }, [assetClass]);
+  const isCash = assetClass === 'Cash';
+  const acDef  = ASSET_CLASSES.find(a => a.id === assetClass) || ASSET_CLASSES[0];
 
-  const acDef = ASSET_CLASSES.find(a => a.id === assetClass) || ASSET_CLASSES[0];
-  const qty = parseFloat(quantity);
-  const avg = parseFloat(avgCost);
-  const cur = parseFloat(currentPrice);
-  const canSave = ticker.trim() && !isNaN(qty) && qty > 0 && !isNaN(avg) && avg >= 0 && !isNaN(cur) && cur >= 0;
+  const qty = isCash ? parseFloat(cashAmt)      : parseFloat(quantity);
+  const avg = isCash ? 1                        : parseFloat(avgCost);
+  const cur = isCash ? 1                        : parseFloat(currentPrice);
+  const tkr = ticker.trim().toUpperCase() || (isCash ? 'CASH' : '');
+
+  const canSave = isCash
+    ? !isNaN(qty) && qty > 0
+    : tkr && !isNaN(qty) && qty > 0 && !isNaN(avg) && avg >= 0 && !isNaN(cur) && cur >= 0;
+
   const liveVal = canSave ? qty * cur : null;
-  const livePnl = canSave ? (cur - avg) * qty : null;
+  const livePnl = canSave && !isCash ? (cur - avg) * qty : null;
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({
-      ...position,
-      ticker:       ticker.trim().toUpperCase(),
-      name:         name.trim(),
-      assetClass,
-      sector,
-      quantity:     qty,
-      avgCost:      avg,
-      currentPrice: cur,
-    });
+    onSave({ ...position, ticker: tkr, name: name.trim(), assetClass, sector: tag.trim(), quantity: qty, avgCost: avg, currentPrice: cur });
   };
 
   const fld = (label, val, set, extra = {}) => (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>{label}</label>
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: 'block', fontFamily: MONO, fontSize: 10, color: C.textSec, marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
       <input value={val} onChange={e => set(e.target.value)} style={S.inputStyle} {...extra} />
     </div>
   );
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 480, margin: isMobile ? '0 12px' : undefined }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 480, margin: isMobile ? '0 8px' : undefined }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 16 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 18 }}>
           {position ? 'Edit Position' : 'Add Position'}
         </div>
 
-        {/* ── Asset Class selector ── */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 11, color: C.textSec, marginBottom: 6, fontWeight: 600 }}>Asset Class *</label>
+        {/* ── Asset Class ── */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Asset Class</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
             {ASSET_CLASSES.map(ac => (
               <button key={ac.id} onClick={() => setAssetClass(ac.id)} style={{
-                padding: '9px 6px', borderRadius: 7, minHeight: 52,
-                border: `1px solid ${assetClass === ac.id ? ac.color : C.border}`,
-                background: assetClass === ac.id ? ac.color + '18' : C.bgInput,
-                color: assetClass === ac.id ? ac.color : C.textSec,
-                fontSize: 12, cursor: 'pointer', textAlign: 'center',
+                padding: '10px 4px', borderRadius: 6, minHeight: 56, border: `1px solid ${assetClass === ac.id ? ac.color : C.border}`,
+                background: assetClass === ac.id ? ac.color + '1a' : C.bgInput,
+                color: assetClass === ac.id ? ac.color : C.textSec, cursor: 'pointer', textAlign: 'center',
               }}>
-                <div style={{ fontSize: 18, marginBottom: 2 }}>{ac.icon}</div>
-                <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.3px' }}>{ac.label}</div>
+                <div style={{ fontSize: 20, lineHeight: 1, marginBottom: 4 }}>{ac.icon}</div>
+                <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.3px', lineHeight: 1.2 }}>{ac.label}</div>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Sector / Sub-type ── */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: C.textSec, marginBottom: 4, fontWeight: 600 }}>Sector / Type</label>
-          <select value={sector} onChange={e => setSector(e.target.value)} style={S.selectStyle}>
-            <option value="">— select —</option>
-            {acDef.sectors.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        {/* ── Ticker + Name ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-          <div>{fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), { placeholder: assetClass === 'Crypto' ? 'XRP' : assetClass === 'Precious Metals' ? 'GOLD' : 'QQQ', ref: tickerRef })}</div>
-          <div>{fld('Name / Label', name, setName, { placeholder: assetClass === 'Crypto' ? 'Ripple XRP' : 'Position name' })}</div>
-        </div>
-
-        {/* ── Numeric fields ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10 }}>
-          <div>{fld(`Qty (${acDef.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}</div>
-          <div>{fld(`Avg Cost (${acDef.priceUnit}) *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
-          <div>{fld(`Price (${acDef.priceUnit}) *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
-        </div>
+        {isCash ? (
+          /* ── Cash: name + single dollar amount ── */
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {fld('Ticker (opt)', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'CASH' })}
+              {fld('Label (opt)', name, setName, { placeholder: 'Checking, HYSA…' })}
+            </div>
+            {fld('Amount ($) *', cashAmt, setCashAmt, { type: 'number', min: '0', step: 'any', placeholder: '0.00', ref: tickerRef })}
+          </>
+        ) : (
+          /* ── All other asset classes ── */
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), {
+                placeholder: assetClass === 'Crypto' ? 'XRP' : assetClass === 'Precious Metals' ? 'GOLD' : 'QQQ', ref: tickerRef,
+              })}
+              {fld('Name (opt)', name, setName, { placeholder: 'Position name' })}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {fld(`Qty (${acDef.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}
+              {fld(`Avg Cost *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}
+              {fld(`Cur Price *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}
+            </div>
+            {fld('Tag (opt)', tag, setTag, { placeholder: 'e.g. Tech, XRP, Growth…' })}
+          </>
+        )}
 
         {canSave && (
-          <div style={{ background: C.bgInput, borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 16 }}>
+          <div style={{ background: C.bgInput, borderRadius: 6, padding: '9px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <span style={{ color: C.textSec }}>Value: <strong style={{ color: C.gold }}>{fmt$(liveVal, 0)}</strong></span>
-            <span style={{ color: C.textSec }}>P&L: <strong style={{ color: livePnl >= 0 ? C.green : C.red }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>
+            {livePnl != null && <span style={{ color: C.textSec }}>P&L: <strong style={{ color: livePnl >= 0 ? C.green : C.red }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>}
           </div>
         )}
 
@@ -2203,6 +2209,7 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
 }
 
 function ScannerTab() {
+  const isMobile = useIsMobile();
   const [scanType,    setScanType]    = useState('regime');
   const [customQuery, setCustomQuery] = useState('');
   const [loading,     setLoading]     = useState(false);
@@ -2259,37 +2266,30 @@ function ScannerTab() {
   const regimeColor = result ? (REGIME_COLORS[result.regime] || '#c9a84c') : '#c9a84c';
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px' }}>
-      {/* JetBrains Mono import */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');`}</style>
-
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: isMobile ? '16px 0' : '24px 16px' }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: isMobile ? 16 : 24 }}>
         <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>
           Market Intelligence
         </div>
-        <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 700, color: C.textPrimary }}>AI Market Scanner</h2>
+        <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: C.textPrimary }}>AI Market Scanner</h2>
         <div style={{ fontFamily: MONO, fontSize: 12, color: C.textSec, marginTop: 4 }}>
-          Powered by Claude · Seven-bucket regime analysis
+          Powered by Claude · Regime analysis
         </div>
       </div>
 
       {/* Panel tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
           { id: 'scan',      label: 'Scanner'  },
           { id: 'history',   label: `History (${scans.length})`  },
           { id: 'watchlist', label: `Watchlist (${watchlist.length})` },
         ].map(p => (
           <button key={p.id} onClick={() => setPanel(p.id)} style={{
-            fontFamily: MONO,
-            fontSize: 12,
-            padding: '6px 14px',
-            borderRadius: 6,
-            border: `1px solid ${panel === p.id ? '#c9a84c' : '#2a4a3a'}`,
+            fontFamily: MONO, fontSize: 12, padding: '8px 14px', borderRadius: 6, minHeight: 40,
+            border: `1px solid ${panel === p.id ? C.gold : C.border}`,
             background: panel === p.id ? 'rgba(201,168,76,0.1)' : 'transparent',
-            color: panel === p.id ? '#c9a84c' : '#9a9880',
-            cursor: 'pointer',
+            color: panel === p.id ? C.gold : C.textSec, cursor: 'pointer',
           }}>
             {p.label}
           </button>
@@ -2300,18 +2300,14 @@ function ScannerTab() {
       {panel === 'scan' && (
         <div>
           {/* Scan type buttons */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
             {SCAN_TYPES.map(st => (
               <button key={st.id} onClick={() => setScanType(st.id)} style={{
-                fontFamily: MONO,
-                fontSize: 12,
-                padding: '7px 14px',
-                borderRadius: 6,
-                border: `1px solid ${scanType === st.id ? '#c9a84c' : '#2a4a3a'}`,
-                background: scanType === st.id ? 'rgba(201,168,76,0.12)' : '#0f231a',
-                color: scanType === st.id ? '#c9a84c' : '#9a9880',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
+                fontFamily: MONO, fontSize: 12, padding: '8px 14px', minHeight: 44, borderRadius: 6,
+                border: `1px solid ${scanType === st.id ? C.gold : C.border}`,
+                background: scanType === st.id ? 'rgba(201,168,76,0.12)' : C.bgCard,
+                color: scanType === st.id ? C.gold : C.textSec,
+                cursor: 'pointer', transition: 'all 0.15s',
               }}>
                 {st.label}
               </button>
@@ -2326,18 +2322,10 @@ function ScannerTab() {
               placeholder="Ask anything about current markets, your portfolio, or specific assets..."
               rows={3}
               style={{
-                width: '100%',
-                boxSizing: 'border-box',
-                background: '#0f231a',
-                border: '1px solid #2a4a3a',
-                borderRadius: 8,
-                color: '#e8e4d8',
-                fontFamily: MONO,
-                fontSize: 13,
-                padding: '10px 14px',
-                resize: 'vertical',
-                outline: 'none',
-                marginBottom: 12,
+                width: '100%', boxSizing: 'border-box',
+                background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8,
+                color: C.textPrimary, fontFamily: MONO, fontSize: 13,
+                padding: '10px 14px', resize: 'vertical', outline: 'none', marginBottom: 12,
               }}
             />
           )}
@@ -2347,22 +2335,19 @@ function ScannerTab() {
             onClick={runScan}
             disabled={loading}
             style={{
-              fontFamily: MONO,
-              fontWeight: 700,
-              fontSize: 13,
-              padding: '10px 28px',
-              borderRadius: 8,
-              border: 'none',
-              background: loading ? '#2a4a3a' : '#c9a84c',
-              color: loading ? '#9a9880' : '#0a1a14',
+              fontFamily: MONO, fontWeight: 700, fontSize: 14,
+              padding: '12px 28px', minHeight: 48,
+              width: isMobile ? '100%' : 'auto',
+              borderRadius: 8, border: 'none',
+              background: loading ? C.bgHover : C.gold,
+              color: loading ? C.textSec : C.bgPrimary,
               cursor: loading ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s',
+              letterSpacing: '0.5px', transition: 'all 0.2s',
               animation: loading ? 'scanPulse 1.2s ease-in-out infinite' : 'none',
               marginBottom: 20,
             }}
           >
-            {loading ? '⟳ Scanning Markets...' : '▶ Run Scan'}
+            {loading ? '⟳  Scanning Markets...' : '▶  Run Scan'}
           </button>
 
           <style>{`
@@ -2417,7 +2402,7 @@ function ScannerTab() {
               </div>
 
               {/* Signal cards grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
                 {result.signals.map((sig, i) => (
                   <SignalCard
                     key={i}

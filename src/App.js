@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -403,6 +403,33 @@ function calcDriftAlerts(alloc, targets) {
     .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
 }
 
+// ─── Globe Icon ────────────────────────────────────────────────────────────────
+function GlobeIcon({ size = 24, color = '#c9a84c' }) {
+  const rawId = useId();
+  const clipId = 'gc' + rawId.replace(/[^a-z0-9]/gi, '');
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx="12" cy="12" r="9.6" />
+        </clipPath>
+      </defs>
+      {/* Outer ring */}
+      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.2" />
+      <g clipPath={`url(#${clipId})`}>
+        {/* Equator */}
+        <ellipse cx="12" cy="12" rx="10" ry="3.2" stroke={color} strokeWidth="1" />
+        {/* Upper latitude */}
+        <ellipse cx="12" cy="7" rx="10" ry="2.3" stroke={color} strokeWidth="0.75" />
+        {/* Lower latitude */}
+        <ellipse cx="12" cy="17" rx="10" ry="2.3" stroke={color} strokeWidth="0.75" />
+        {/* Vertical meridian */}
+        <ellipse cx="12" cy="12" rx="3.8" ry="10" stroke={color} strokeWidth="1" />
+      </g>
+    </svg>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 function PinLock({ onUnlock }) {
   const [digits, setDigits] = useState([]);
@@ -442,9 +469,10 @@ function PinLock({ onUnlock }) {
     }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap');`}</style>
       {/* Logo */}
-      <div style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 700, color: C.gold, letterSpacing: '5px', marginBottom: 4 }}>MIR</div>
-      <div style={{ fontFamily: SERIF, fontSize: 9, fontWeight: 600, color: C.goldDim, letterSpacing: '4px', textTransform: 'uppercase', marginBottom: 6 }}>Asset Group</div>
-      <div style={{ width: 36, height: 1, background: C.gold, opacity: 0.4, marginBottom: 24 }} />
+      <GlobeIcon size={80} color={C.gold} />
+      <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 700, color: C.gold, letterSpacing: '4px', marginTop: 18, marginBottom: 3 }}>MIR ASSET GROUP</div>
+      <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: C.goldDim, letterSpacing: '3px', textTransform: 'uppercase', marginBottom: 10 }}>Asset Management</div>
+      <div style={{ width: 40, height: 1, background: C.gold, opacity: 0.35, marginBottom: 20 }} />
       <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 36 }}>
         Private Access
       </div>
@@ -553,9 +581,14 @@ export default function App() {
 
       <header style={{ ...S.header, height: isMobile ? 52 : 58 }}>
         {/* Logo */}
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>
-          <div style={{ ...S.logo, fontSize: isMobile ? 14 : 17, letterSpacing: '2px' }}>MIR</div>
-          <div style={{ fontFamily: SERIF, fontSize: isMobile ? 7 : 8, fontWeight: 600, color: C.goldDim, letterSpacing: '3px', textTransform: 'uppercase' }}>Asset Group</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+          <GlobeIcon size={isMobile ? 24 : 30} color={C.gold} />
+          {!isMobile && (
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+              <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 700, color: C.gold, letterSpacing: '2px' }}>MIR ASSET GROUP</div>
+              <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: C.goldDim, letterSpacing: '3px', textTransform: 'uppercase', marginTop: 2 }}>Asset Management</div>
+            </div>
+          )}
         </div>
 
         {isMobile ? (
@@ -632,9 +665,12 @@ export default function App() {
         gap: 8,
         background: C.bgPrimary,
       }}>
-        <div>
-          <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 600, color: C.gold }}>Mir Asset Group, LLC</div>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginTop: 2 }}>Asset Management</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <GlobeIcon size={16} color={C.goldDim} />
+          <div>
+            <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 600, color: C.gold }}>Mir Asset Group, LLC</div>
+            <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginTop: 2 }}>Asset Management</div>
+          </div>
         </div>
         <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '1px' }}>Private · Confidential</div>
       </footer>

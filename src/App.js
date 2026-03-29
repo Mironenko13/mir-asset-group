@@ -15,29 +15,29 @@ const TITHE_RATE = 0.10;
 const BUCKET_COLORS = {
   'QQQ':                 '#6366f1',
   'Crypto':              '#f97316',
-  'Dividends':           '#22c55e',
+  'Dividends':           '#5ab87a',
   'Quantum':             '#8b5cf6',
   'Quantum/Emerging':    '#8b5cf6',
-  'Gold':                '#d4a843',
-  'Energy':              '#ef4444',
-  'Energy/Commodities':  '#ef4444',
-  'Silver':              '#94a3b8',
+  'Gold':                '#c9a84c',
+  'Energy':              '#c45555',
+  'Energy/Commodities':  '#c45555',
+  'Silver':              '#9a9880',
 };
 
 // Default buckets seeded on first load (stored in mag_buckets)
 const DEFAULT_BUCKETS = [
   { id: 'qqq',     name: 'QQQ',               color: '#6366f1' },
   { id: 'crypto',  name: 'Crypto',             color: '#f97316' },
-  { id: 'div',     name: 'Dividends',          color: '#22c55e' },
+  { id: 'div',     name: 'Dividends',          color: '#5ab87a' },
   { id: 'quantum', name: 'Quantum/Emerging',   color: '#8b5cf6' },
-  { id: 'gold',    name: 'Gold',               color: '#d4a843' },
-  { id: 'energy',  name: 'Energy/Commodities', color: '#ef4444' },
-  { id: 'silver',  name: 'Silver',             color: '#94a3b8' },
+  { id: 'gold',    name: 'Gold',               color: '#c9a84c' },
+  { id: 'energy',  name: 'Energy/Commodities', color: '#c45555' },
+  { id: 'silver',  name: 'Silver',             color: '#9a9880' },
 ];
 
 const BUCKET_COLOR_PALETTE = [
-  '#6366f1','#f97316','#22c55e','#8b5cf6','#d4a843','#ef4444',
-  '#94a3b8','#06b6d4','#ec4899','#84cc16','#f59e0b','#10b981',
+  '#6366f1','#f97316','#5ab87a','#8b5cf6','#c9a84c','#c45555',
+  '#9a9880','#06b6d4','#ec4899','#84cc16','#f59e0b','#10b981',
 ];
 
 const ASSET_TYPE_META = {
@@ -54,16 +54,16 @@ const EXPENSE_CATEGORIES = [
 
 const CAT_COLORS = {
   'Housing':         '#6366f1',
-  'Food':            '#22c55e',
+  'Food':            '#5ab87a',
   'Vehicle/Fuel':    '#f97316',
   'Homeschool':      '#8b5cf6',
-  'Tithe':           '#d4a843',
-  'Tools/Equipment': '#ef4444',
+  'Tithe':           '#c9a84c',
+  'Tools/Equipment': '#c45555',
   'Tech/Software':   '#06b6d4',
   'Kids':            '#ec4899',
   'Medical':         '#14b8a6',
   'Investments':     '#84cc16',
-  'Misc':            '#64748b',
+  'Misc':            '#9a9880',
 };
 
 const CRYPTO_SUB_BUCKETS = ['XRP', 'WLFI', 'BTC', 'Solana', 'XLM', 'HBAR', 'Other'];
@@ -73,10 +73,10 @@ const NW_CATEGORIES = ['liquidInvestments', 'crypto', 'metals', 'cash', 'busines
 const NW_COLORS = {
   liquidInvestments: '#6366f1',
   crypto:            '#f97316',
-  metals:            '#d4a843',
-  cash:              '#22c55e',
+  metals:            '#c9a84c',
+  cash:              '#5ab87a',
   businessEquity:    '#8b5cf6',
-  realEstate:        '#ef4444',
+  realEstate:        '#c45555',
 };
 const NW_LABELS = {
   liquidInvestments: 'Liquid Investments',
@@ -101,22 +101,41 @@ async function hashPin(pin) {
 // ─── Asset Acquisition Roadmap ─────────────────────────────────────────────────
 const ROADMAP_MILESTONES = [
   { id: 'skidsteer', label: 'Skid Steer / Equipment Rental', icon: '🏗', minCost: 25000,  maxCost: 40000,  color: '#f97316', description: 'Used equipment for rental to homeowners & contractors' },
-  { id: 'butcher',   label: 'Butcher Shop',                  icon: '🥩', minCost: 80000,  maxCost: 120000, color: '#ef4444', description: 'Community butcher suited to Mennonite market' },
+  { id: 'butcher',   label: 'Butcher Shop',                  icon: '🥩', minCost: 80000,  maxCost: 120000, color: '#c45555', description: 'Community butcher suited to Mennonite market' },
   { id: 'rental',    label: 'Rental Properties',             icon: '🏠', minCost: 150000, maxCost: 200000, color: '#6366f1', description: 'Union County, PA residential rental' },
-  { id: 'land',      label: 'Land (Long-Term Hold)',          icon: '🌾', minCost: 100000, maxCost: 200000, color: '#22c55e', description: 'Land acquisition for long-term appreciation' },
+  { id: 'land',      label: 'Land (Long-Term Hold)',          icon: '🌾', minCost: 100000, maxCost: 200000, color: '#5ab87a', description: 'Land acquisition for long-term appreciation' },
 ];
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
+const C = {
+  bgPrimary:  '#0a1a14',
+  bgCard:     '#0f231a',
+  bgInput:    '#132b21',
+  bgHover:    '#1a3529',
+  border:     '#2a4a3a',
+  gold:       '#c9a84c',
+  goldBright: '#d4b85a',
+  goldDim:    '#a08a3a',
+  textPrimary:'#e8e4d8',
+  textSec:    '#9a9880',
+  textMuted:  '#6a6a58',
+  green:      '#5ab87a',
+  red:        '#c45555',
+};
+
+const SERIF  = '"Playfair Display", Georgia, "Times New Roman", serif';
+const MONO   = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace";
+
 const S = {
   app: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    background: '#0f1117',
+    background: C.bgPrimary,
     minHeight: '100vh',
-    color: '#f1f5f9',
+    color: C.textPrimary,
   },
   header: {
-    background: '#0a0d14',
-    borderBottom: '1px solid #1e2535',
+    background: C.bgPrimary,
+    borderBottom: `1px solid ${C.gold}`,
     padding: '0 20px',
     display: 'flex',
     alignItems: 'center',
@@ -129,100 +148,119 @@ const S = {
     gap: 8,
   },
   logo: {
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#d4a843',
-    letterSpacing: '-0.3px',
+    fontFamily: SERIF,
+    fontSize: 16,
+    fontWeight: 700,
+    color: C.gold,
+    letterSpacing: '0.5px',
     flexShrink: 0,
+    lineHeight: 1.15,
   },
   nav: { display: 'flex', gap: 2 },
   navBtn: (active) => ({
-    padding: '6px 13px',
-    background: active ? 'rgba(212,168,67,0.12)' : 'transparent',
-    border: active ? '1px solid rgba(212,168,67,0.3)' : '1px solid transparent',
-    borderRadius: 7,
-    color: active ? '#d4a843' : '#64748b',
-    fontWeight: active ? 700 : 500,
-    fontSize: 13,
+    fontFamily: MONO,
+    fontVariant: 'small-caps',
+    letterSpacing: '0.5px',
+    padding: '6px 12px',
+    background: active ? `rgba(201,168,76,0.1)` : 'transparent',
+    border: active ? `1px solid rgba(201,168,76,0.35)` : '1px solid transparent',
+    borderRadius: 4,
+    color: active ? C.gold : C.textMuted,
+    fontWeight: active ? 700 : 400,
+    fontSize: 11,
     cursor: 'pointer',
+    transition: 'color 0.15s',
   }),
-  body: { padding: '20px 16px', maxWidth: 980, margin: '0 auto' },
+  body: { padding: '24px 20px', maxWidth: 980, margin: '0 auto' },
   card: {
-    background: '#161b27',
-    border: '1px solid #1e2535',
-    borderRadius: 12,
-    padding: '16px 18px',
+    background: C.bgCard,
+    borderTop: `2px solid ${C.gold}`,
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: '18px 20px',
+    boxShadow: '0 2px 12px rgba(201,168,76,0.06)',
   },
   cardTitle: {
+    fontFamily: MONO,
     fontSize: 10,
     fontWeight: 700,
-    color: '#64748b',
+    color: C.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: '0.6px',
-    marginBottom: 10,
+    letterSpacing: '0.8px',
+    marginBottom: 12,
   },
-  bigNum: { fontSize: 26, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.1 },
-  bigNumSub: { fontSize: 11, color: '#64748b', marginTop: 3 },
+  bigNum: {
+    fontFamily: SERIF,
+    fontSize: 26,
+    fontWeight: 700,
+    color: C.textPrimary,
+    lineHeight: 1.1,
+  },
+  bigNumSub: { fontFamily: MONO, fontSize: 11, color: C.textSec, marginTop: 3 },
   sectionLabel: {
+    fontFamily: MONO,
     fontSize: 10,
     fontWeight: 700,
-    color: '#64748b',
+    color: C.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: '0.6px',
+    letterSpacing: '0.8px',
     marginBottom: 10,
-    marginTop: 22,
+    marginTop: 24,
   },
   inputStyle: {
     width: '100%',
     boxSizing: 'border-box',
-    background: '#0f1117',
-    border: '1px solid #334155',
-    borderRadius: 8,
-    color: '#f1f5f9',
+    background: C.bgInput,
+    border: `1px solid ${C.border}`,
+    borderRadius: 6,
+    color: C.textPrimary,
     fontSize: 14,
     padding: '9px 12px',
-    fontFamily: 'inherit',
+    fontFamily: MONO,
     outline: 'none',
   },
   selectStyle: {
     width: '100%',
     boxSizing: 'border-box',
-    background: '#0f1117',
-    border: '1px solid #334155',
-    borderRadius: 8,
-    color: '#f1f5f9',
+    background: C.bgInput,
+    border: `1px solid ${C.border}`,
+    borderRadius: 6,
+    color: C.textPrimary,
     fontSize: 14,
     padding: '9px 12px',
-    fontFamily: 'inherit',
+    fontFamily: MONO,
     outline: 'none',
     cursor: 'pointer',
   },
   btn: {
     padding: '9px 16px',
-    background: 'linear-gradient(135deg,#d4a843,#b8892a)',
+    background: `linear-gradient(135deg,${C.gold},${C.goldDim})`,
     border: 'none',
-    borderRadius: 8,
-    color: '#0f1117',
+    borderRadius: 6,
+    color: C.bgPrimary,
     fontWeight: 700,
     fontSize: 13,
     cursor: 'pointer',
+    fontFamily: MONO,
+    letterSpacing: '0.3px',
   },
   btnGhost: {
     padding: '9px 16px',
-    background: '#1e2535',
-    border: '1px solid #2d3748',
-    borderRadius: 8,
-    color: '#94a3b8',
+    background: C.bgHover,
+    border: `1px solid ${C.border}`,
+    borderRadius: 6,
+    color: C.textSec,
     fontWeight: 600,
     fontSize: 13,
     cursor: 'pointer',
+    fontFamily: MONO,
   },
   btnDanger: {
     padding: '4px 9px',
-    background: 'rgba(239,68,68,0.1)',
-    border: '1px solid rgba(239,68,68,0.2)',
-    borderRadius: 6,
-    color: '#ef4444',
+    background: `rgba(196,85,85,0.1)`,
+    border: `1px solid rgba(196,85,85,0.25)`,
+    borderRadius: 4,
+    color: C.red,
     fontWeight: 600,
     fontSize: 11,
     cursor: 'pointer',
@@ -230,7 +268,7 @@ const S = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.75)',
+    background: 'rgba(0,0,0,0.82)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -238,15 +276,17 @@ const S = {
     padding: 20,
   },
   modal: {
-    background: '#161b27',
-    border: '1px solid #1e2535',
-    borderRadius: 14,
+    background: C.bgCard,
+    border: `1px solid ${C.border}`,
+    borderTop: `2px solid ${C.gold}`,
+    borderRadius: 8,
     padding: '24px 22px',
     width: '100%',
     maxWidth: 440,
     maxHeight: '90vh',
     overflowY: 'auto',
     position: 'relative',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
   },
   closeBtn: {
     position: 'absolute',
@@ -254,7 +294,7 @@ const S = {
     right: 16,
     background: 'none',
     border: 'none',
-    color: '#64748b',
+    color: C.textMuted,
     fontSize: 20,
     cursor: 'pointer',
     lineHeight: 1,
@@ -262,50 +302,55 @@ const S = {
   },
   tag: (color) => ({
     display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: 10,
+    padding: '2px 7px',
+    borderRadius: 3,
     background: color + '22',
     color: color,
-    fontSize: 11,
-    fontWeight: 600,
+    fontSize: 10,
+    fontWeight: 700,
+    fontFamily: MONO,
+    letterSpacing: '0.3px',
   }),
   table: { width: '100%', borderCollapse: 'collapse' },
   th: {
     textAlign: 'left',
-    fontSize: 10,
+    fontFamily: MONO,
+    fontSize: 9,
     fontWeight: 700,
-    color: '#475569',
+    color: C.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: '0.4px',
+    letterSpacing: '0.6px',
     padding: '6px 8px',
-    borderBottom: '1px solid #1e2535',
+    borderBottom: `1px solid ${C.border}`,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
   td: {
-    padding: '8px 8px',
+    padding: '9px 8px',
+    fontFamily: MONO,
     fontSize: 13,
-    color: '#e2e8f0',
-    borderBottom: '1px solid #0f1117',
+    color: C.textPrimary,
+    borderBottom: `1px solid ${C.bgInput}`,
     verticalAlign: 'middle',
   },
-  pnlPos: { color: '#22c55e', fontWeight: 700 },
-  pnlNeg: { color: '#ef4444', fontWeight: 700 },
+  pnlPos: { color: C.green, fontWeight: 700 },
+  pnlNeg: { color: C.red,   fontWeight: 700 },
   alert: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '8px 12px',
-    background: 'rgba(212,168,67,0.08)',
-    border: '1px solid rgba(212,168,67,0.2)',
-    borderRadius: 8,
+    padding: '8px 14px',
+    background: 'rgba(201,168,76,0.07)',
+    border: `1px solid rgba(201,168,76,0.2)`,
+    borderLeft: `3px solid ${C.gold}`,
+    borderRadius: 4,
     fontSize: 12,
-    color: '#d4a843',
+    color: C.gold,
     marginBottom: 6,
     flexWrap: 'wrap',
   },
-  grid2: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 },
-  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 },
+  grid2: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 },
+  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -360,7 +405,7 @@ function portfolioStats(positions) {
 
 function getBucketColor(buckets, name) {
   const b = (buckets || []).find(x => x.name === name);
-  return b ? b.color : (BUCKET_COLORS[name] || '#64748b');
+  return b ? b.color : (BUCKET_COLORS[name] || '#9a9880');
 }
 
 function inferAssetType(bucketName) {
@@ -411,16 +456,17 @@ function PinLock({ onUnlock }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: '#0a0d14',
+      position: 'fixed', inset: 0, background: C.bgPrimary,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', zIndex: 9999, userSelect: 'none',
     }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap');`}</style>
       {/* Logo */}
-      <div style={{ fontSize: 13, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>
-        ◆ Mir Asset Group
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: '#d4a843', marginBottom: 48, letterSpacing: '-0.5px' }}>
-        Private Dashboard
+      <div style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 700, color: C.gold, letterSpacing: '5px', marginBottom: 4 }}>MIR</div>
+      <div style={{ fontFamily: SERIF, fontSize: 9, fontWeight: 600, color: C.goldDim, letterSpacing: '4px', textTransform: 'uppercase', marginBottom: 6 }}>Asset Group</div>
+      <div style={{ width: 36, height: 1, background: C.gold, opacity: 0.4, marginBottom: 24 }} />
+      <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 36 }}>
+        Private Access
       </div>
 
       {/* Dots */}
@@ -432,13 +478,13 @@ function PinLock({ onUnlock }) {
         {[0,1,2,3].map(i => (
           <div key={i} style={{
             width: 14, height: 14, borderRadius: '50%',
-            background: digits.length > i ? '#d4a843' : 'transparent',
-            border: `2px solid ${digits.length > i ? '#d4a843' : '#334155'}`,
+            background: digits.length > i ? '#c9a84c' : 'transparent',
+            border: `2px solid ${digits.length > i ? '#c9a84c' : '#2a4a3a'}`,
             transition: 'background 0.15s, border-color 0.15s',
           }} />
         ))}
       </div>
-      <div style={{ height: 20, fontSize: 13, color: '#ef4444', marginBottom: 32 }}>{error}</div>
+      <div style={{ height: 20, fontSize: 13, color: '#c45555', marginBottom: 32 }}>{error}</div>
 
       {/* Numpad */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 72px)', gap: 12 }}>
@@ -451,17 +497,18 @@ function PinLock({ onUnlock }) {
               onClick={() => isDel ? del() : addDigit(k)}
               style={{
                 width: 72, height: 72, borderRadius: '50%',
-                background: isDel ? 'transparent' : '#1e2535',
-                border: isDel ? 'none' : '1px solid #2d3748',
-                color: isDel ? '#94a3b8' : '#f1f5f9',
-                fontSize: isDel ? 22 : 24,
+                background: isDel ? 'transparent' : C.bgCard,
+                border: isDel ? 'none' : `1px solid ${C.border}`,
+                color: isDel ? C.textSec : C.textPrimary,
+                fontFamily: MONO,
+                fontSize: isDel ? 20 : 22,
                 fontWeight: isDel ? 400 : 600,
                 cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.1s',
+                transition: 'background 0.15s',
               }}
-              onMouseEnter={e => { if (!isDel) e.currentTarget.style.background = '#2d3748'; }}
-              onMouseLeave={e => { if (!isDel) e.currentTarget.style.background = '#1e2535'; }}
+              onMouseEnter={e => { if (!isDel) e.currentTarget.style.background = C.bgHover; }}
+              onMouseLeave={e => { if (!isDel) e.currentTarget.style.background = C.bgCard; }}
             >
               {k}
             </button>
@@ -515,10 +562,25 @@ export default function App() {
 
   return (
     <div style={S.app}>
-      <header style={{ ...S.header, height: isMobile ? 52 : 56 }}>
-        <div style={S.logo}>&#9670; Mir Asset Group</div>
+      {/* Font imports */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+        * { box-sizing: border-box; }
+        ::selection { background: rgba(201,168,76,0.2); color: #e8e4d8; }
+        ::-webkit-scrollbar { width: 6px; background: #0a1a14; }
+        ::-webkit-scrollbar-thumb { background: #2a4a3a; border-radius: 3px; }
+        option { background: #132b21; color: #e8e4d8; }
+      `}</style>
+
+      <header style={{ ...S.header, height: isMobile ? 52 : 58 }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>
+          <div style={{ ...S.logo, fontSize: isMobile ? 14 : 17, letterSpacing: '2px' }}>MIR</div>
+          <div style={{ fontFamily: SERIF, fontSize: isMobile ? 7 : 8, fontWeight: 600, color: C.goldDim, letterSpacing: '3px', textTransform: 'uppercase' }}>Asset Group</div>
+        </div>
+
         {isMobile ? (
-          <button onClick={() => setMenuOpen(m => !m)} style={{ background: 'none', border: 'none', color: '#d4a843', fontSize: 24, cursor: 'pointer', padding: '8px 4px', lineHeight: 1 }}>
+          <button onClick={() => setMenuOpen(m => !m)} style={{ background: 'none', border: 'none', color: C.gold, fontSize: 22, cursor: 'pointer', padding: '8px 4px', lineHeight: 1 }}>
             {menuOpen ? '✕' : '☰'}
           </button>
         ) : (
@@ -532,24 +594,25 @@ export default function App() {
 
       {/* Mobile full-screen nav overlay */}
       {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: '#0a0d14', zIndex: 200, display: 'flex', flexDirection: 'column', paddingTop: 52 }}>
+        <div style={{ position: 'fixed', inset: 0, background: C.bgPrimary, zIndex: 200, display: 'flex', flexDirection: 'column', paddingTop: 52 }}>
+          <div style={{ padding: '16px 24px 8px', fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>Navigation</div>
           {tabs.map(t => (
             <button key={t.id} onClick={() => switchTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '18px 24px', background: 'none', border: 'none',
-              borderBottom: '1px solid #1e2535',
-              color: tab === t.id ? '#d4a843' : '#94a3b8',
-              fontWeight: tab === t.id ? 700 : 400,
-              fontSize: 17, cursor: 'pointer', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '16px 24px', background: 'none', border: 'none',
+              borderBottom: `1px solid ${C.border}`,
+              color: tab === t.id ? C.gold : C.textSec,
+              fontFamily: MONO, fontWeight: tab === t.id ? 700 : 400,
+              fontSize: 15, cursor: 'pointer', textAlign: 'left',
             }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: tab === t.id ? '#d4a843' : 'transparent', border: `1px solid ${tab === t.id ? '#d4a843' : '#334155'}`, flexShrink: 0 }} />
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: tab === t.id ? C.gold : 'transparent', border: `1px solid ${tab === t.id ? C.gold : C.border}`, flexShrink: 0 }} />
               {t.label}
             </button>
           ))}
         </div>
       )}
 
-      <main style={{ ...S.body, padding: isMobile ? '16px 12px' : '20px 16px' }}>
+      <main style={{ ...S.body, padding: isMobile ? '16px 12px' : '24px 20px' }}>
         {tab === 'dashboard' && (
           <DashboardTab
             positions={positions}
@@ -581,6 +644,24 @@ export default function App() {
         {tab === 'roadmap'  && <RoadmapTab roadmapSavings={roadmapSavings} setRoadmapSavings={setRoadmapSavings} portfolioValue={totalValue} />}
         {tab === 'scanner'  && <ScannerTab />}
       </main>
+
+      {/* Footer */}
+      <footer style={{
+        borderTop: `1px solid ${C.gold}`,
+        padding: '18px 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 8,
+        background: C.bgPrimary,
+      }}>
+        <div>
+          <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 600, color: C.gold }}>Mir Asset Group, LLC</div>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginTop: 2 }}>Asset Management</div>
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '1px' }}>Private · Confidential</div>
+      </footer>
     </div>
   );
 }
@@ -588,10 +669,10 @@ export default function App() {
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, subColor, accent }) {
   return (
-    <div style={{ ...S.card, borderTop: `2px solid ${accent || '#d4a843'}` }}>
+    <div style={{ ...S.card, borderTop: `2px solid ${accent || '#c9a84c'}` }}>
       <div style={S.cardTitle}>{label}</div>
       <div style={S.bigNum}>{value}</div>
-      {sub && <div style={{ ...S.bigNumSub, color: subColor || '#64748b' }}>{sub}</div>}
+      {sub && <div style={{ ...S.bigNumSub, color: subColor || '#9a9880' }}>{sub}</div>}
     </div>
   );
 }
@@ -626,28 +707,28 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
 
   return (
     <div>
-      <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>Wealth Command Center</div>
-      <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>Mir Asset Group, LLC — Personal Dashboard</div>
+      <div style={{ fontFamily: SERIF, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Capital Management Dashboard</div>
+      <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '1px', marginBottom: 24 }}>Mir Asset Group, LLC — Private</div>
 
       {/* ── KPI row ── */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiCard label="Portfolio Value" value={fmt$(totalValue, 0)} sub={fmtPct(totalPnlPct) + ' total return'} subColor={totalPnl >= 0 ? '#22c55e' : '#ef4444'} accent="#d4a843" />
-        <KpiCard label="Unrealized P&L" value={fmt$(totalPnl, 0)} sub={`${positions.length} position${positions.length !== 1 ? 's' : ''}`} subColor={totalPnl >= 0 ? '#22c55e' : '#ef4444'} accent={totalPnl >= 0 ? '#22c55e' : '#ef4444'} />
-        <KpiCard label="Deployable (MTD)" value={fmt$(deployable, 0)} sub={`${fmt$(monthlySpend, 0)} spent this month`} subColor={deployable >= 0 ? '#22c55e' : '#ef4444'} accent="#d4a843" />
+        <KpiCard label="Portfolio Value" value={fmt$(totalValue, 0)} sub={fmtPct(totalPnlPct) + ' total return'} subColor={totalPnl >= 0 ? '#5ab87a' : '#c45555'} accent="#d4a843" />
+        <KpiCard label="Unrealized P&L" value={fmt$(totalPnl, 0)} sub={`${positions.length} position${positions.length !== 1 ? 's' : ''}`} subColor={totalPnl >= 0 ? '#5ab87a' : '#c45555'} accent={totalPnl >= 0 ? '#5ab87a' : '#c45555'} />
+        <KpiCard label="Deployable (MTD)" value={fmt$(deployable, 0)} sub={`${fmt$(monthlySpend, 0)} spent this month`} subColor={deployable >= 0 ? '#5ab87a' : '#c45555'} accent="#d4a843" />
         <KpiCard label="LTV Borrow Power" value={fmt$(totalValue * 0.4, 0)} sub="40% portfolio LTV" accent="#6366f1" />
       </div>
 
       {/* ── Drift alerts ── */}
       {alerts.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div role="button" onClick={() => onTabSwitch('portfolio')} style={{ ...S.sectionLabel, cursor: 'pointer', color: '#d4a843', marginTop: 0 }}>
+          <div role="button" onClick={() => onTabSwitch('portfolio')} style={{ ...S.sectionLabel, cursor: 'pointer', color: '#c9a84c', marginTop: 0 }}>
             &#9888; Allocation Drift — click to manage
           </div>
           {alerts.slice(0, 4).map(a => (
             <div key={a.bucket} style={S.alert}>
               <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
-              <span style={{ color: '#94a3b8', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
-              <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#ef4444' : '#22c55e' }}>
+              <span style={{ color: '#9a9880', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
+              <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#c45555' : '#5ab87a' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}%
               </span>
             </div>
@@ -664,7 +745,7 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
             <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11 }} onClick={() => onTabSwitch('portfolio')}>Manage</button>
           </div>
           {positions.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, padding: '12px 0' }}>No positions — add them in Portfolio tab</div>
+            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>No positions — add them in Portfolio tab</div>
           ) : snapshotBuckets.map(name => {
             const color = getBucketColor(buckets, name);
             const actual = alloc[name] || 0;
@@ -678,13 +759,13 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{name}</span>
+                    <span style={{ fontSize: 12, color: '#9a9880' }}>{name}</span>
                   </div>
-                  <span style={{ fontSize: 11, color: over ? (drift > 0 ? '#ef4444' : '#22c55e') : '#64748b' }}>
+                  <span style={{ fontSize: 11, color: over ? (drift > 0 ? '#c45555' : '#5ab87a') : '#9a9880' }}>
                     {actual.toFixed(1)}%{hasTarget ? ` / ${target}%${over ? (drift > 0 ? ' ▲' : ' ▼') : ''}` : ''}
                   </span>
                 </div>
-                <div style={{ height: 4, background: '#1e2535', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: 4, background: '#2a4a3a', borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${Math.min((actual / barMax) * 100, 100)}%`, background: color, borderRadius: 2, transition: 'width 0.3s' }} />
                 </div>
               </div>
@@ -699,15 +780,15 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
             <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11, minHeight: 32 }} onClick={() => setShowQuickAdd(true)}>+ Add</button>
           </div>
           {recentExp.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, padding: '12px 0' }}>No expenses logged yet</div>
+            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>No expenses logged yet</div>
           ) : (
             recentExp.map(e => (
               <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #1e2535' }}>
                 <div>
-                  <div style={{ fontSize: 13, color: '#e2e8f0' }}>{e.note || e.category}</div>
-                  <div style={{ fontSize: 10, color: '#475569' }}>{e.category} &middot; {e.date}</div>
+                  <div style={{ fontSize: 13, color: '#e8e4d8' }}>{e.note || e.category}</div>
+                  <div style={{ fontSize: 10, color: '#6a6a58' }}>{e.category} &middot; {e.date}</div>
                 </div>
-                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 13 }}>{fmt$(e.amount, 0)}</div>
+                <div style={{ fontWeight: 700, color: '#e8e4d8', fontSize: 13 }}>{fmt$(e.amount, 0)}</div>
               </div>
             ))
           )}
@@ -716,17 +797,17 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
               View all {expenses.length} expenses &#8594;
             </button>
           )}
-          <div style={{ marginTop: 12, padding: '10px 12px', background: '#0f1117', borderRadius: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+          <div style={{ marginTop: 12, padding: '10px 12px', background: '#132b21', borderRadius: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 4 }}>
               <span>Monthly Net</span><span>{fmt$(MONTHLY_NET, 0)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 4 }}>
               <span>Tithe ({(TITHE_RATE * 100).toFixed(0)}%)</span><span>-{fmt$(monthlyTithe, 0)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 6 }}>
               <span>MTD Spend</span><span>-{fmt$(monthlySpend, 0)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: deployable >= 0 ? '#22c55e' : '#ef4444', borderTop: '1px solid #1e2535', paddingTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: deployable >= 0 ? '#5ab87a' : '#c45555', borderTop: '1px solid #1e2535', paddingTop: 6 }}>
               <span>Deployable</span><span>{fmt$(deployable, 0)}</span>
             </div>
           </div>
@@ -811,10 +892,10 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 800, color: '#f1f5f9' }}>Portfolio Tracker</div>
+          <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Portfolio Tracker</div>
           {positions.length > 0 && (
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-              {fmt$(totalValue, 0)} total &middot; P&L <span style={{ color: totalPnl >= 0 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{fmt$(totalPnl, 0)}</span>
+            <div style={{ fontSize: 12, color: '#9a9880', marginTop: 2 }}>
+              {fmt$(totalValue, 0)} total &middot; P&L <span style={{ color: totalPnl >= 0 ? '#5ab87a' : '#c45555', fontWeight: 700 }}>{fmt$(totalPnl, 0)}</span>
             </div>
           )}
         </div>
@@ -827,8 +908,8 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
           {alerts.map(a => (
             <div key={a.bucket} style={S.alert}>
               <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
-              <span style={{ color: '#94a3b8', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
-              <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#ef4444' : '#22c55e' }}>
+              <span style={{ color: '#9a9880', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
+              <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#c45555' : '#5ab87a' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}% drift
               </span>
             </div>
@@ -847,7 +928,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
                   {pieData.map((entry) => <Cell key={entry.name} fill={getBucketColor(buckets, entry.name)} />)}
                 </Pie>
-                <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+                <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
             {/* Bucket legend + target setter */}
@@ -858,8 +939,8 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
                 return (
                   <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid #0f1117', flexWrap: 'wrap' }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{name}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{(alloc[name] || 0).toFixed(1)}%</span>
+                    <span style={{ fontSize: 12, color: '#9a9880', flex: 1 }}>{name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#e8e4d8' }}>{(alloc[name] || 0).toFixed(1)}%</span>
                     {editingTarget === name ? (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <input
@@ -876,12 +957,12 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
                       </div>
                     ) : tgt != null ? (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: '#64748b' }}>→ {tgt}%</span>
+                        <span style={{ fontSize: 11, color: '#9a9880' }}>→ {tgt}%</span>
                         <button onClick={() => { setEditingTarget(name); setTargetInput(String(tgt)); }} style={{ ...S.btnGhost, padding: '2px 6px', fontSize: 10, minHeight: 24 }}>✎</button>
                         <button onClick={() => removeTarget(name)} style={{ ...S.btnDanger, padding: '2px 5px', minHeight: 24 }}>✕</button>
                       </div>
                     ) : (
-                      <button onClick={() => { setEditingTarget(name); setTargetInput(''); }} style={{ ...S.btnGhost, padding: '2px 8px', fontSize: 10, minHeight: 24, color: '#64748b' }}>
+                      <button onClick={() => { setEditingTarget(name); setTargetInput(''); }} style={{ ...S.btnGhost, padding: '2px 8px', fontSize: 10, minHeight: 24, color: '#9a9880' }}>
                         Set target
                       </button>
                     )}
@@ -897,9 +978,9 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
             <ResponsiveContainer width="100%" height={isMobile ? 220 : 215}>
               <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 9 }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-                <RTooltip formatter={(v, n) => v != null ? [`${v}%`, n] : ['–', n]} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+                <XAxis dataKey="name" tick={{ fill: '#9a9880', fontSize: 9 }} />
+                <YAxis tick={{ fill: '#9a9880', fontSize: 10 }} />
+                <RTooltip formatter={(v, n) => v != null ? [`${v}%`, n] : ['–', n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="target" fill="#2d3748" name="Target %" radius={[3, 3, 0, 0]} />
                 <Bar dataKey="actual" fill="#d4a843" name="Actual %" radius={[3, 3, 0, 0]} />
@@ -913,7 +994,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
       {positions.length === 0 ? (
         <div style={{ ...S.card, textAlign: 'center', padding: '48px 20px' }}>
           <div style={{ fontSize: 40, marginBottom: 14 }}>&#128200;</div>
-          <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 18 }}>No positions yet. Add your first holding to start tracking.</div>
+          <div style={{ fontSize: 15, color: '#9a9880', marginBottom: 18 }}>No positions yet. Add your first holding to start tracking.</div>
           <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Add First Position</button>
         </div>
       ) : (
@@ -940,18 +1021,18 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
                   return (
                     <tr key={pos.id} onDoubleClick={() => setEditPos(pos)} style={{ cursor: 'default' }}>
                       <td style={S.td}>
-                        <div style={{ fontWeight: 700, color: '#f1f5f9' }}>{meta.icon} {pos.ticker}</div>
-                        {pos.name && <div style={{ fontSize: 10, color: '#64748b' }}>{pos.name}</div>}
+                        <div style={{ fontWeight: 700, color: '#e8e4d8' }}>{meta.icon} {pos.ticker}</div>
+                        {pos.name && <div style={{ fontSize: 10, color: '#9a9880' }}>{pos.name}</div>}
                       </td>
                       <td style={S.td}>
                         <span style={S.tag(getBucketColor(buckets, pos.bucket))}>{pos.bucket}</span>
-                        {pos.subBucket && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{pos.subBucket}</div>}
+                        {pos.subBucket && <div style={{ fontSize: 10, color: '#9a9880', marginTop: 2 }}>{pos.subBucket}</div>}
                       </td>
                       <td style={S.td}><strong>{fmt$(val, 0)}</strong></td>
                       <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{pnl >= 0 ? '+' : ''}{fmt$(pnl, 0)}</td>
                       <td style={{ ...S.td, ...(pnlPct >= 0 ? S.pnlPos : S.pnlNeg) }}>{fmtPct(pnlPct)}</td>
                       <td style={S.td}>{allocPct.toFixed(1)}%</td>
-                      <td style={{ ...S.td, fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+                      <td style={{ ...S.td, fontSize: 11, color: '#9a9880', whiteSpace: 'nowrap' }}>
                         {pos.quantity} {meta.qtyUnit} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
                       </td>
                       <td style={S.td}>
@@ -966,8 +1047,8 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: '#94a3b8', fontSize: 11 }}>TOTAL ({positions.length})</td>
-                  <td style={{ ...S.td, fontWeight: 800, color: '#d4a843' }}>{fmt$(totalValue, 0)}</td>
+                  <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: '#9a9880', fontSize: 11 }}>TOTAL ({positions.length})</td>
+                  <td style={{ ...S.td, fontWeight: 700, color: '#c9a84c' }}>{fmt$(totalValue, 0)}</td>
                   <td style={{ ...S.td, ...(totalPnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{totalPnl >= 0 ? '+' : ''}{fmt$(totalPnl, 0)}</td>
                   <td style={{ ...S.td, ...(totalPnl >= 0 ? S.pnlPos : S.pnlNeg) }}>
                     {totalCost > 0 ? fmtPct((totalPnl / totalCost) * 100) : '–'}
@@ -977,7 +1058,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
               </tfoot>
             </table>
           </div>
-          <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>Double-click a row to edit</div>
+          <div style={{ marginTop: 8, fontSize: 10, color: '#2a4a3a' }}>Double-click a row to edit</div>
         </div>
       )}
 
@@ -1059,7 +1140,7 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
 
   const fld = (label, val, set, extra = {}) => (
     <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>{label}</label>
+      <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>{label}</label>
       <input value={val} onChange={e => set(e.target.value)} style={S.inputStyle} {...extra} />
     </div>
   );
@@ -1068,13 +1149,13 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 460, margin: isMobile ? '0 12px' : undefined }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 16 }}>
           {position ? 'Edit Position' : 'Add Position'}
         </div>
 
         {/* ── Bucket selector ── */}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Bucket *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Bucket *</label>
           {!creatingBucket ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select value={bucket} onChange={e => { if (e.target.value === '__new__') setCreatingBucket(true); else setBucket(e.target.value); }} style={{ ...S.selectStyle, flex: 1 }}>
@@ -1101,14 +1182,14 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
 
         {/* ── Asset type ── */}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Asset Type</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Asset Type</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {Object.entries(ASSET_TYPE_META).map(([type, m]) => (
               <button key={type} onClick={() => setAssetType(type)} style={{
                 flex: 1, minWidth: 80, padding: '7px 6px', borderRadius: 7, minHeight: 40,
-                border: `1px solid ${assetType === type ? '#d4a843' : '#2d3748'}`,
-                background: assetType === type ? 'rgba(212,168,67,0.1)' : '#0f1117',
-                color: assetType === type ? '#d4a843' : '#64748b',
+                border: `1px solid ${assetType === type ? '#c9a84c' : '#2a4a3a'}`,
+                background: assetType === type ? 'rgba(201,168,76,0.1)' : '#132b21',
+                color: assetType === type ? '#c9a84c' : '#9a9880',
                 fontSize: 12, cursor: 'pointer',
               }}>
                 {m.icon} {type}
@@ -1126,7 +1207,7 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
         {/* ── Crypto sub-bucket ── */}
         {isCryptoBucket && (
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Sub-Bucket</label>
+            <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Sub-Bucket</label>
             <select value={subBucket} onChange={e => setSubBucket(e.target.value)} style={S.selectStyle}>
               <option value="">&#8212; select &#8212;</option>
               {CRYPTO_SUB_BUCKETS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1142,9 +1223,9 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
         </div>
 
         {canSave && (
-          <div style={{ background: '#0f1117', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 16 }}>
-            <span style={{ color: '#64748b' }}>Value: <strong style={{ color: '#d4a843' }}>{fmt$(liveVal, 0)}</strong></span>
-            <span style={{ color: '#64748b' }}>P&L: <strong style={{ color: livePnl >= 0 ? '#22c55e' : '#ef4444' }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>
+          <div style={{ background: '#132b21', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 16 }}>
+            <span style={{ color: '#9a9880' }}>Value: <strong style={{ color: '#c9a84c' }}>{fmt$(liveVal, 0)}</strong></span>
+            <span style={{ color: '#9a9880' }}>P&L: <strong style={{ color: livePnl >= 0 ? '#5ab87a' : '#c45555' }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>
           </div>
         )}
 
@@ -1196,7 +1277,7 @@ function SpendingTab({ expenses, setExpenses }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 20, gap: 10 }}>
-        <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 800, color: '#f1f5f9' }}>Spending Tracker</div>
+        <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Spending Tracker</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
           <select value={viewMonth} onChange={e => setViewMonth(e.target.value)} style={{ ...S.selectStyle, width: isMobile ? '1fr' : 'auto', flex: isMobile ? 1 : undefined, minWidth: 170 }}>
             {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
@@ -1210,7 +1291,7 @@ function SpendingTab({ expenses, setExpenses }) {
         <KpiCard label="Total Spent" value={fmt$(totalSpend, 0)} accent="#ef4444" />
         <KpiCard label="Monthly Net" value={fmt$(MONTHLY_NET, 0)} sub="~$1,427/wk net" accent="#22c55e" />
         <KpiCard label="Tithe Budget" value={fmt$(monthlyTithe, 0)} sub="10% gross" accent="#d4a843" />
-        <KpiCard label="Deployable" value={fmt$(deployable, 0)} subColor={deployable >= 0 ? '#22c55e' : '#ef4444'} sub="Net - tithe - spend" accent={deployable >= 0 ? '#22c55e' : '#ef4444'} />
+        <KpiCard label="Deployable" value={fmt$(deployable, 0)} subColor={deployable >= 0 ? '#5ab87a' : '#c45555'} sub="Net - tithe - spend" accent={deployable >= 0 ? '#5ab87a' : '#c45555'} />
       </div>
 
       {/* ── Bar chart ── */}
@@ -1220,11 +1301,11 @@ function SpendingTab({ expenses, setExpenses }) {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 42 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => '$' + v.toLocaleString()} />
-              <RTooltip formatter={v => [fmt$(v, 0), 'Amount']} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+              <XAxis dataKey="name" tick={{ fill: '#9a9880', fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
+              <YAxis tick={{ fill: '#9a9880', fontSize: 10 }} tickFormatter={v => '$' + v.toLocaleString()} />
+              <RTooltip formatter={v => [fmt$(v, 0), 'Amount']} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
               <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                {chartData.map(entry => <Cell key={entry.name} fill={CAT_COLORS[entry.name] || '#64748b'} />)}
+                {chartData.map(entry => <Cell key={entry.name} fill={CAT_COLORS[entry.name] || '#9a9880'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1236,21 +1317,21 @@ function SpendingTab({ expenses, setExpenses }) {
         <div style={S.card}>
           <div style={S.cardTitle}>By Category</div>
           {byCategory.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#475569' }}>No expenses this month</div>
+            <div style={{ fontSize: 12, color: '#6a6a58' }}>No expenses this month</div>
           ) : (
             <>
               {byCategory.map(({ cat, amount }) => (
                 <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #0f1117' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: CAT_COLORS[cat] || '#64748b', flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{cat}</span>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: CAT_COLORS[cat] || '#9a9880', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#9a9880' }}>{cat}</span>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{fmt$(amount, 0)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#e8e4d8' }}>{fmt$(amount, 0)}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0 0', marginTop: 4, borderTop: '1px solid #334155' }}>
-                <span style={{ fontSize: 12, color: '#64748b' }}>Total</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{fmt$(totalSpend, 0)}</span>
+                <span style={{ fontSize: 12, color: '#9a9880' }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#e8e4d8' }}>{fmt$(totalSpend, 0)}</span>
               </div>
             </>
           )}
@@ -1259,19 +1340,19 @@ function SpendingTab({ expenses, setExpenses }) {
         <div style={S.card}>
           <div style={S.cardTitle}>Transactions ({monthExpenses.length})</div>
           {monthExpenses.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#475569', padding: '12px 0' }}>
-              No expenses for {viewMonth}. Click <strong style={{ color: '#d4a843' }}>+ Add</strong> to log one.
+            <div style={{ fontSize: 13, color: '#6a6a58', padding: '12px 0' }}>
+              No expenses for {viewMonth}. Click <strong style={{ color: '#c9a84c' }}>+ Add</strong> to log one.
             </div>
           ) : (
             <div style={{ maxHeight: 380, overflowY: 'auto' }}>
               {[...monthExpenses].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid #0f1117' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: CAT_COLORS[e.category] || '#64748b', flexShrink: 0 }} />
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: CAT_COLORS[e.category] || '#9a9880', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note || e.category}</div>
-                    <div style={{ fontSize: 10, color: '#475569' }}>{e.category} &middot; {e.date}</div>
+                    <div style={{ fontSize: 13, color: '#e8e4d8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note || e.category}</div>
+                    <div style={{ fontSize: 10, color: '#6a6a58' }}>{e.category} &middot; {e.date}</div>
                   </div>
-                  <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 13, flexShrink: 0 }}>{fmt$(e.amount)}</div>
+                  <div style={{ fontWeight: 700, color: '#e8e4d8', fontSize: 13, flexShrink: 0 }}>{fmt$(e.amount)}</div>
                   <button style={S.btnDanger} onClick={() => handleDelete(e.id)}>&#10005;</button>
                 </div>
               ))}
@@ -1313,10 +1394,10 @@ function AddExpenseModal({ onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>Log Expense</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>Log Expense</div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
           <input
             ref={amtRef}
             type="number"
@@ -1326,24 +1407,24 @@ function AddExpenseModal({ onSave, onClose }) {
             onChange={e => setAmount(e.target.value)}
             onKeyDown={onKey}
             placeholder="0.00"
-            style={{ ...S.inputStyle, fontSize: 22, fontWeight: 700, color: '#d4a843' }}
+            style={{ ...S.inputStyle, fontSize: 22, fontWeight: 700, color: '#c9a84c' }}
           />
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Category</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Category</label>
           <select value={category} onChange={e => setCategory(e.target.value)} style={S.selectStyle}>
             {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Note (optional)</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Note (optional)</label>
           <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={onKey} placeholder="What was this for?" style={S.inputStyle} />
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Date</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.selectStyle} />
         </div>
 
@@ -1416,8 +1497,8 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Net Worth Over Time</div>
-          {chartData.length > 0 && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{chartData.length} monthly snapshot{chartData.length !== 1 ? 's' : ''}</div>}
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8' }}>Net Worth Over Time</div>
+          {chartData.length > 0 && <div style={{ fontSize: 12, color: '#9a9880', marginTop: 2 }}>{chartData.length} monthly snapshot{chartData.length !== 1 ? 's' : ''}</div>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={S.btnGhost} onClick={() => setShowMilestone(true)}>+ Milestone</button>
@@ -1428,7 +1509,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard label="Current Net Worth"   value={fmt$(latestTotal, 0)} accent="#d4a843" />
-        <KpiCard label="MoM Change"          value={fmt$(momChange, 0)} sub={fmtPct(momPct)} subColor={momChange >= 0 ? '#22c55e' : '#ef4444'} accent={momChange >= 0 ? '#22c55e' : '#ef4444'} />
+        <KpiCard label="MoM Change"          value={fmt$(momChange, 0)} sub={fmtPct(momPct)} subColor={momChange >= 0 ? '#5ab87a' : '#c45555'} accent={momChange >= 0 ? '#5ab87a' : '#c45555'} />
         <KpiCard label="Snapshots on File"   value={String(snapshots.length)} sub={latest ? `Latest: ${fmtMonth(latest.month)}` : 'None yet'} accent="#6366f1" />
         <KpiCard label="Milestones"          value={String(milestones.length)} sub={`${milestones.filter(m => m.netWorth <= latestTotal).length} achieved`} accent="#8b5cf6" />
       </div>
@@ -1437,7 +1518,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
       {chartData.length === 0 ? (
         <div style={{ ...S.card, textAlign: 'center', padding: '48px 20px', marginBottom: 20 }}>
           <div style={{ fontSize: 40, marginBottom: 14 }}>&#128200;</div>
-          <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 18 }}>No snapshots yet. Add a monthly snapshot to start tracking your net worth over time.</div>
+          <div style={{ fontSize: 15, color: '#9a9880', marginBottom: 18 }}>No snapshots yet. Add a monthly snapshot to start tracking your net worth over time.</div>
           <button style={S.btn} onClick={() => setShowSnapshot(true)}>+ Add First Snapshot</button>
         </div>
       ) : (
@@ -1448,7 +1529,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
               {NW_CATEGORIES.map(cat => (
                 <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: NW_COLORS[cat], flexShrink: 0 }} />
-                  <span style={{ color: '#64748b' }}>{NW_LABELS[cat]}</span>
+                  <span style={{ color: '#9a9880' }}>{NW_LABELS[cat]}</span>
                 </div>
               ))}
             </div>
@@ -1464,12 +1545,12 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
                 ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{ fill: '#64748b', fontSize: 10 }} />
-              <YAxis tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v)} tick={{ fill: '#64748b', fontSize: 10 }} width={52} />
+              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{ fill: '#9a9880', fontSize: 10 }} />
+              <YAxis tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v)} tick={{ fill: '#9a9880', fontSize: 10 }} width={52} />
               <RTooltip
                 formatter={(v, name) => [fmt$(v, 0), NW_LABELS[name] || name]}
                 labelFormatter={l => fmtMonth(l)}
-                contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }}
+                contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }}
               />
               {NW_CATEGORIES.map(cat => (
                 <Area key={cat} type="monotone" dataKey={cat} stackId="nw"
@@ -1477,7 +1558,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
               ))}
               {milestones.map(m => (
                 <ReferenceLine key={m.id} y={m.netWorth} stroke="#d4a843" strokeDasharray="5 3"
-                  label={{ value: m.label, position: 'insideTopRight', fill: '#d4a843', fontSize: 9 }} />
+                  label={{ value: m.label, position: 'insideTopRight', fill: '#c9a84c', fontSize: 9 }} />
               ))}
             </AreaChart>
           </ResponsiveContainer>
@@ -1489,7 +1570,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
         <div style={S.card}>
           <div style={S.cardTitle}>Monthly Snapshots</div>
           {snapshots.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#475569' }}>No snapshots yet</div>
+            <div style={{ fontSize: 12, color: '#6a6a58' }}>No snapshots yet</div>
           ) : (
             <div style={{ maxHeight: 320, overflowY: 'auto' }}>
               <table style={S.table}>
@@ -1508,8 +1589,8 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
                     return (
                       <tr key={row.month}>
                         <td style={S.td}>{fmtMonth(row.month)}</td>
-                        <td style={{ ...S.td, fontWeight: 700, color: '#d4a843' }}>{fmt$(row.total, 0)}</td>
-                        <td style={{ ...S.td, fontSize: 11, color: change == null ? '#64748b' : change >= 0 ? '#22c55e' : '#ef4444' }}>
+                        <td style={{ ...S.td, fontWeight: 700, color: '#c9a84c' }}>{fmt$(row.total, 0)}</td>
+                        <td style={{ ...S.td, fontSize: 11, color: change == null ? '#9a9880' : change >= 0 ? '#5ab87a' : '#c45555' }}>
                           {change == null ? '–' : (change >= 0 ? '+' : '') + fmt$(change, 0)}
                         </td>
                         <td style={S.td}>
@@ -1539,7 +1620,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
             <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11 }} onClick={() => setShowMilestone(true)}>+ Add</button>
           </div>
           {milestones.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#475569' }}>No milestones yet — add markers like &ldquo;First $50K&rdquo; to track on the chart</div>
+            <div style={{ fontSize: 12, color: '#6a6a58' }}>No milestones yet — add markers like &ldquo;First $50K&rdquo; to track on the chart</div>
           ) : (
             [...milestones].sort((a, b) => a.netWorth - b.netWorth).map(m => {
               const achieved = m.netWorth <= latestTotal;
@@ -1547,8 +1628,8 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid #0f1117' }}>
                   <span style={{ fontSize: 14 }}>{achieved ? '✅' : '🎯'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: achieved ? '#22c55e' : '#f1f5f9', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
-                    <div style={{ fontSize: 10, color: '#64748b' }}>{fmt$(m.netWorth, 0)}</div>
+                    <div style={{ fontSize: 13, color: achieved ? '#5ab87a' : '#e8e4d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
+                    <div style={{ fontSize: 10, color: '#9a9880' }}>{fmt$(m.netWorth, 0)}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button style={{ ...S.btnGhost, padding: '2px 7px', fontSize: 10 }} onClick={() => setEditMilestone(m)}>Edit</button>
@@ -1603,12 +1684,12 @@ function AddSnapshotModal({ snapshot, onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: 460 }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>
           {snapshot ? 'Edit Snapshot' : 'Add Monthly Snapshot'}
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Month *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Month *</label>
           <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={S.selectStyle} />
         </div>
 
@@ -1617,7 +1698,7 @@ function AddSnapshotModal({ snapshot, onSave, onClose }) {
             <div key={cat} style={{ marginBottom: 10 }}>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
                 <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: NW_COLORS[cat], marginRight: 5, verticalAlign: 'middle' }} />
-                <span style={{ color: '#94a3b8' }}>{NW_LABELS[cat]}</span>
+                <span style={{ color: '#9a9880' }}>{NW_LABELS[cat]}</span>
               </label>
               <input
                 type="number"
@@ -1632,9 +1713,9 @@ function AddSnapshotModal({ snapshot, onSave, onClose }) {
           ))}
         </div>
 
-        <div style={{ background: '#0f1117', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#64748b' }}>Total Net Worth</span>
-          <strong style={{ color: '#d4a843', fontSize: 18 }}>{fmt$(total, 0)}</strong>
+        <div style={{ background: '#132b21', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#9a9880' }}>Total Net Worth</span>
+          <strong style={{ color: '#c9a84c', fontSize: 18 }}>{fmt$(total, 0)}</strong>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1660,17 +1741,17 @@ function AddMilestoneModal({ milestone, onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: 380 }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>
           {milestone ? 'Edit Milestone' : 'Add Milestone'}
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Label *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Label *</label>
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. First $50K" style={S.inputStyle} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => setLabel(s)}
-                style={{ padding: '2px 8px', background: '#1e2535', border: '1px solid #2d3748', borderRadius: 10, color: '#64748b', fontSize: 10, cursor: 'pointer' }}>
+                style={{ padding: '2px 8px', background: '#2a4a3a', border: '1px solid #2a4a3a', borderRadius: 6, color: '#9a9880', fontSize: 10, cursor: 'pointer' }}>
                 {s}
               </button>
             ))}
@@ -1678,9 +1759,9 @@ function AddMilestoneModal({ milestone, onSave, onClose }) {
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Net Worth Value *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Net Worth Value *</label>
           <input type="number" min="0" value={netWorth} onChange={e => setNetWorth(e.target.value)} placeholder="50000" style={S.inputStyle} />
-          <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>Appears as a dashed line on the chart when this NW value is reached</div>
+          <div style={{ fontSize: 10, color: '#6a6a58', marginTop: 4 }}>Appears as a dashed line on the chart when this NW value is reached</div>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1740,7 +1821,7 @@ function TitheTab({ givingEntries, setGivingEntries }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>Tithe &amp; Giving</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8' }}>Tithe &amp; Giving</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={viewYear} onChange={e => setViewYear(e.target.value)} style={{ ...S.selectStyle, width: 'auto', minWidth: 80 }}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -1754,7 +1835,7 @@ function TitheTab({ givingEntries, setGivingEntries }) {
         <KpiCard label="YTD Given"        value={fmt$(ytdTotal, 0)} accent="#d4a843" />
         <KpiCard label="YTD Target"       value={fmt$(ytdTarget, 0)} sub={`Through ${new Date().toLocaleDateString('en-US', { month: 'long' })}`} accent="#22c55e" />
         <KpiCard label="Monthly Target"   value={fmt$(monthlyTarget, 0)} sub="10% of gross income" accent="#d4a843" />
-        <KpiCard label="YTD Variance"     value={fmt$(ytdVariance, 0)} subColor={ytdVariance >= 0 ? '#22c55e' : '#ef4444'} sub={ytdVariance >= 0 ? 'On track ✓' : 'Behind'} accent={ytdVariance >= 0 ? '#22c55e' : '#ef4444'} />
+        <KpiCard label="YTD Variance"     value={fmt$(ytdVariance, 0)} subColor={ytdVariance >= 0 ? '#5ab87a' : '#c45555'} sub={ytdVariance >= 0 ? 'On track ✓' : 'Behind'} accent={ytdVariance >= 0 ? '#5ab87a' : '#c45555'} />
       </div>
 
       {/* Monthly bar chart */}
@@ -1763,9 +1844,9 @@ function TitheTab({ givingEntries, setGivingEntries }) {
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-            <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10 }} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => '$' + v} />
-            <RTooltip formatter={v => [fmt$(v, 0), '']} contentStyle={{ background: '#161b27', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: 12 }} />
+            <XAxis dataKey="month" tick={{ fill: '#9a9880', fontSize: 10 }} />
+            <YAxis tick={{ fill: '#9a9880', fontSize: 10 }} tickFormatter={v => '$' + v} />
+            <RTooltip formatter={v => [fmt$(v, 0), '']} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Bar dataKey="target" fill="#2d3748" name="Target"  radius={[3, 3, 0, 0]} />
             <Bar dataKey="actual" fill="#d4a843" name="Actual"  radius={[3, 3, 0, 0]} />
@@ -1778,18 +1859,18 @@ function TitheTab({ givingEntries, setGivingEntries }) {
         <div style={S.card}>
           <div style={S.cardTitle}>By Recipient</div>
           {byRecipient.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#475569' }}>No giving for {viewYear}</div>
+            <div style={{ fontSize: 12, color: '#6a6a58' }}>No giving for {viewYear}</div>
           ) : (
             <>
               {byRecipient.map(({ name, amount }) => (
                 <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #0f1117' }}>
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{fmt$(amount, 0)}</span>
+                  <span style={{ fontSize: 12, color: '#9a9880' }}>{name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#e8e4d8' }}>{fmt$(amount, 0)}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 7, borderTop: '1px solid #334155', marginTop: 4 }}>
-                <span style={{ fontSize: 12, color: '#64748b' }}>Total</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#d4a843' }}>{fmt$(ytdTotal, 0)}</span>
+                <span style={{ fontSize: 12, color: '#9a9880' }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#c9a84c' }}>{fmt$(ytdTotal, 0)}</span>
               </div>
             </>
           )}
@@ -1798,19 +1879,19 @@ function TitheTab({ givingEntries, setGivingEntries }) {
         <div style={S.card}>
           <div style={S.cardTitle}>Giving Log — {viewYear}</div>
           {ytdEntries.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#475569', padding: '12px 0' }}>
-              No giving logged for {viewYear}. Click <strong style={{ color: '#d4a843' }}>+ Log Giving</strong> to add an entry.
+            <div style={{ fontSize: 13, color: '#6a6a58', padding: '12px 0' }}>
+              No giving logged for {viewYear}. Click <strong style={{ color: '#c9a84c' }}>+ Log Giving</strong> to add an entry.
             </div>
           ) : (
             <div style={{ maxHeight: 360, overflowY: 'auto' }}>
               {[...ytdEntries].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: '1px solid #0f1117' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d4a843', flexShrink: 0 }} />
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#c9a84c', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.recipient || '—'}</div>
-                    <div style={{ fontSize: 10, color: '#475569' }}>{e.note ? `${e.note} \u00b7 ` : ''}{e.date}</div>
+                    <div style={{ fontSize: 13, color: '#e8e4d8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.recipient || '—'}</div>
+                    <div style={{ fontSize: 10, color: '#6a6a58' }}>{e.note ? `${e.note} \u00b7 ` : ''}{e.date}</div>
                   </div>
-                  <div style={{ fontWeight: 700, color: '#d4a843', fontSize: 13, flexShrink: 0 }}>{fmt$(e.amount)}</div>
+                  <div style={{ fontWeight: 700, color: '#c9a84c', fontSize: 13, flexShrink: 0 }}>{fmt$(e.amount)}</div>
                   <button style={S.btnDanger} onClick={() => setGivingEntries(p => p.filter(x => x.id !== e.id))}>&#10005;</button>
                 </div>
               ))}
@@ -1850,22 +1931,22 @@ function AddGivingModal({ onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 18 }}>Log Giving</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>Log Giving</div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
           <input ref={amtRef} type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave(); }}
-            placeholder="0.00" style={{ ...S.inputStyle, fontSize: 22, fontWeight: 700, color: '#d4a843' }} />
+            placeholder="0.00" style={{ ...S.inputStyle, fontSize: 22, fontWeight: 700, color: '#c9a84c' }} />
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Recipient</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Recipient</label>
           <input value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Church, missions, local need…" style={S.inputStyle} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {RECIPIENTS.map(r => (
               <button key={r} onClick={() => setRecipient(r)}
-                style={{ padding: '2px 8px', background: '#1e2535', border: '1px solid #2d3748', borderRadius: 10, color: '#64748b', fontSize: 10, cursor: 'pointer' }}>
+                style={{ padding: '2px 8px', background: '#2a4a3a', border: '1px solid #2a4a3a', borderRadius: 6, color: '#9a9880', fontSize: 10, cursor: 'pointer' }}>
                 {r}
               </button>
             ))}
@@ -1873,12 +1954,12 @@ function AddGivingModal({ onSave, onClose }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Note (optional)</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Note (optional)</label>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Purpose or details" style={S.inputStyle} />
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Date</label>
+          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.selectStyle} />
         </div>
 
@@ -1924,35 +2005,35 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
-      <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>Funded via 40% LTV portfolio loans</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
+      <div style={{ fontSize: 12, color: '#6a6a58', marginBottom: 20 }}>Funded via 40% LTV portfolio loans</div>
 
       {/* LTV summary card */}
       <div style={{ ...S.card, marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
           <div>
             <div style={S.cardTitle}>Portfolio Value</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>{fmt$(portfolioValue, 0)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#e8e4d8' }}>{fmt$(portfolioValue, 0)}</div>
           </div>
-          <div style={{ fontSize: 24, color: '#334155' }}>&#215;</div>
+          <div style={{ fontSize: 24, color: '#2a4a3a' }}>&#215;</div>
           <div>
             <div style={S.cardTitle}>LTV Rate</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>40%</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#e8e4d8' }}>40%</div>
           </div>
-          <div style={{ fontSize: 24, color: '#334155' }}>=</div>
+          <div style={{ fontSize: 24, color: '#2a4a3a' }}>=</div>
           <div>
             <div style={S.cardTitle}>Borrowing Power</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#d4a843' }}>{fmt$(ltvPower, 0)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#c9a84c' }}>{fmt$(ltvPower, 0)}</div>
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={S.cardTitle}>Milestones Fundable</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: totalFundable > 0 ? '#22c55e' : '#64748b' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: totalFundable > 0 ? '#5ab87a' : '#9a9880' }}>
               {totalFundable} / {ROADMAP_MILESTONES.length}
             </div>
           </div>
         </div>
         {portfolioValue === 0 && (
-          <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>
+          <div style={{ marginTop: 10, fontSize: 12, color: '#6a6a58' }}>
             Add positions in the Portfolio tab to calculate your LTV borrowing power.
           </div>
         )}
@@ -1981,15 +2062,15 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
                 <div style={{ fontSize: 30, lineHeight: 1, flexShrink: 0 }}>{milestone.icon}</div>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>#{idx + 1}</span>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>{milestone.label}</span>
-                    {fundable && <span style={S.tag('#22c55e')}>Fundable Now</span>}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6a6a58' }}>#{idx + 1}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8' }}>{milestone.label}</span>
+                    {fundable && <span style={S.tag('#5ab87a')}>Fundable Now</span>}
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>{milestone.description}</div>
+                  <div style={{ fontSize: 12, color: '#9a9880' }}>{milestone.description}</div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Range</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: '#9a9880', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Range</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#e8e4d8', marginTop: 2 }}>
                     {fmt$(milestone.minCost, 0)} – {fmt$(milestone.maxCost, 0)}
                   </div>
                 </div>
@@ -1997,11 +2078,11 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
 
               {/* Progress bar */}
               <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9a9880', marginBottom: 5 }}>
                   <span>Total Funding (Saved + LTV Borrow)</span>
                   <span>{fmt$(totalFunding, 0)} / {fmt$(milestone.maxCost, 0)}</span>
                 </div>
-                <div style={{ height: 10, background: '#1e2535', borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{ height: 10, background: '#2a4a3a', borderRadius: 5, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%',
                     width: `${totalFrac * 100}%`,
@@ -2015,7 +2096,7 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
                 <div style={{ display: 'flex', gap: 14, marginTop: 5, fontSize: 10 }}>
                   <span style={{ color: '#6366f1' }}>&#11044; LTV: {fmt$(ltvPower, 0)}</span>
                   <span style={{ color: milestone.color }}>&#11044; Saved: {fmt$(saved, 0)}</span>
-                  {!fundable && <span style={{ color: '#ef4444' }}>Shortfall: {fmt$(Math.max(shortfall, 0), 0)}</span>}
+                  {!fundable && <span style={{ color: '#c45555' }}>Shortfall: {fmt$(Math.max(shortfall, 0), 0)}</span>}
                 </div>
               </div>
 
@@ -2023,11 +2104,11 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
               {isEditing ? (
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid #1e2535' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>Amount Saved ($)</label>
+                    <label style={{ display: 'block', fontSize: 10, color: '#9a9880', marginBottom: 3, fontWeight: 600 }}>Amount Saved ($)</label>
                     <input type="number" min="0" value={editSaved} onChange={e => setEditSaved(e.target.value)} style={{ ...S.inputStyle, width: 130 }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>Monthly Savings Rate ($)</label>
+                    <label style={{ display: 'block', fontSize: 10, color: '#9a9880', marginBottom: 3, fontWeight: 600 }}>Monthly Savings Rate ($)</label>
                     <input type="number" min="0" value={editRate} onChange={e => setEditRate(e.target.value)} style={{ ...S.inputStyle, width: 150 }} />
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -2037,11 +2118,11 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 8, borderTop: '1px solid #1e2535' }}>
-                  <div style={{ display: 'flex', gap: 18, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
-                    <span>Saved: <strong style={{ color: '#f1f5f9' }}>{fmt$(saved, 0)}</strong></span>
-                    {monthlyRate > 0 && <span>Rate: <strong style={{ color: '#f1f5f9' }}>{fmt$(monthlyRate, 0)}/mo</strong></span>}
-                    {projMonths != null && <span>ETA: <strong style={{ color: '#d4a843' }}>~{projMonths} mo ({Math.ceil(projMonths / 12)}yr)</strong></span>}
-                    {fundable && <span style={{ color: '#22c55e', fontWeight: 700 }}>Ready to acquire!</span>}
+                  <div style={{ display: 'flex', gap: 18, fontSize: 12, color: '#9a9880', flexWrap: 'wrap' }}>
+                    <span>Saved: <strong style={{ color: '#e8e4d8' }}>{fmt$(saved, 0)}</strong></span>
+                    {monthlyRate > 0 && <span>Rate: <strong style={{ color: '#e8e4d8' }}>{fmt$(monthlyRate, 0)}/mo</strong></span>}
+                    {projMonths != null && <span>ETA: <strong style={{ color: '#c9a84c' }}>~{projMonths} mo ({Math.ceil(projMonths / 12)}yr)</strong></span>}
+                    {fundable && <span style={{ color: '#5ab87a', fontWeight: 700 }}>Ready to acquire!</span>}
                   </div>
                   <button style={{ ...S.btnGhost, padding: '5px 12px', fontSize: 11 }} onClick={() => startEdit(milestone.id)}>
                     Update Savings
@@ -2051,7 +2132,7 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
 
               {/* Fundable alert */}
               {fundable && (
-                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, fontSize: 12, color: '#22c55e' }}>
+                <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, fontSize: 12, color: '#5ab87a' }}>
                   &#9989; Saved + LTV power ({fmt$(totalFunding, 0)}) exceeds minimum target ({fmt$(milestone.minCost, 0)}). This milestone is fundable today.
                 </div>
               )}
@@ -2075,21 +2156,19 @@ const SCAN_TYPES = [
 ];
 
 const DIR_META = {
-  bullish: { icon: '▲', color: '#22c55e', border: '#22c55e' },
-  bearish: { icon: '▼', color: '#ef4444', border: '#ef4444' },
-  neutral: { icon: '◆', color: '#d4a843', border: '#d4a843' },
+  bullish: { icon: '▲', color: '#5ab87a', border: '#5ab87a' },
+  bearish: { icon: '▼', color: '#c45555', border: '#c45555' },
+  neutral: { icon: '◆', color: '#c9a84c', border: '#c9a84c' },
 };
 
-const CONF_COLORS = { High: '#4ecb71', Medium: '#d4a843', Low: '#e05555' };
+const CONF_COLORS = { High: '#4ecb71', Medium: '#c9a84c', Low: '#e05555' };
 
 const REGIME_COLORS = {
-  'Risk-On':    '#22c55e',
-  'Risk-Off':   '#ef4444',
-  'Transition': '#d4a843',
+  'Risk-On':    '#5ab87a',
+  'Risk-Off':   '#c45555',
+  'Transition': '#c9a84c',
   'Crisis':     '#e05555',
 };
-
-const MONO = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace";
 
 function fmtTs(iso) {
   if (!iso) return '';
@@ -2100,13 +2179,13 @@ function fmtTs(iso) {
 
 function SignalCard({ signal, inWatchlist, onToggleWatch }) {
   const dir = DIR_META[signal.direction] || DIR_META.neutral;
-  const confColor = CONF_COLORS[signal.confidence] || '#d4a843';
+  const confColor = CONF_COLORS[signal.confidence] || '#c9a84c';
   return (
     <div style={{
-      background: '#14161c',
+      background: '#0f231a',
       border: '1px solid #1e2535',
       borderLeft: `3px solid ${dir.border}`,
-      borderRadius: 10,
+      borderRadius: 6,
       padding: '14px 16px',
       display: 'flex',
       flexDirection: 'column',
@@ -2118,7 +2197,7 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
           <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: dir.color }}>
             {dir.icon}
           </span>
-          <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#f1f5f9', letterSpacing: '0.5px' }}>
+          <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#e8e4d8', letterSpacing: '0.5px' }}>
             {signal.ticker}
           </span>
           <span style={{
@@ -2131,7 +2210,7 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
             fontSize: 11, padding: '2px 8px', borderRadius: 4,
-            background: '#1e2535', color: '#94a3b8',
+            background: '#2a4a3a', color: '#9a9880',
           }}>
             {signal.sector}
           </span>
@@ -2139,10 +2218,10 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
             onClick={() => onToggleWatch(signal.ticker)}
             title={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
             style={{
-              background: inWatchlist ? 'rgba(212,168,67,0.15)' : 'transparent',
-              border: `1px solid ${inWatchlist ? '#d4a843' : '#2d3748'}`,
+              background: inWatchlist ? 'rgba(201,168,76,0.15)' : 'transparent',
+              border: `1px solid ${inWatchlist ? '#c9a84c' : '#2a4a3a'}`,
               borderRadius: 6,
-              color: inWatchlist ? '#d4a843' : '#64748b',
+              color: inWatchlist ? '#c9a84c' : '#9a9880',
               fontSize: 13,
               cursor: 'pointer',
               padding: '2px 7px',
@@ -2154,7 +2233,7 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
         </div>
       </div>
       {/* Reasoning */}
-      <div style={{ fontFamily: MONO, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+      <div style={{ fontFamily: MONO, fontSize: 12, color: '#9a9880', lineHeight: 1.6 }}>
         {signal.reasoning}
       </div>
     </div>
@@ -2215,7 +2294,7 @@ function ScannerTab() {
     setPanel('scan');
   }, []);
 
-  const regimeColor = result ? (REGIME_COLORS[result.regime] || '#d4a843') : '#d4a843';
+  const regimeColor = result ? (REGIME_COLORS[result.regime] || '#c9a84c') : '#c9a84c';
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px' }}>
@@ -2224,11 +2303,11 @@ function ScannerTab() {
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: MONO, fontSize: 11, color: '#64748b', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>
-          Phase 3
+        <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>
+          Market Intelligence
         </div>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>AI Market Scanner</h2>
-        <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+        <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 700, color: C.textPrimary }}>AI Market Scanner</h2>
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textSec, marginTop: 4 }}>
           Powered by Claude · Seven-bucket regime analysis
         </div>
       </div>
@@ -2245,9 +2324,9 @@ function ScannerTab() {
             fontSize: 12,
             padding: '6px 14px',
             borderRadius: 6,
-            border: `1px solid ${panel === p.id ? '#d4a843' : '#2d3748'}`,
-            background: panel === p.id ? 'rgba(212,168,67,0.1)' : 'transparent',
-            color: panel === p.id ? '#d4a843' : '#64748b',
+            border: `1px solid ${panel === p.id ? '#c9a84c' : '#2a4a3a'}`,
+            background: panel === p.id ? 'rgba(201,168,76,0.1)' : 'transparent',
+            color: panel === p.id ? '#c9a84c' : '#9a9880',
             cursor: 'pointer',
           }}>
             {p.label}
@@ -2266,9 +2345,9 @@ function ScannerTab() {
                 fontSize: 12,
                 padding: '7px 14px',
                 borderRadius: 6,
-                border: `1px solid ${scanType === st.id ? '#d4a843' : '#2d3748'}`,
-                background: scanType === st.id ? 'rgba(212,168,67,0.12)' : '#14161c',
-                color: scanType === st.id ? '#d4a843' : '#94a3b8',
+                border: `1px solid ${scanType === st.id ? '#c9a84c' : '#2a4a3a'}`,
+                background: scanType === st.id ? 'rgba(201,168,76,0.12)' : '#0f231a',
+                color: scanType === st.id ? '#c9a84c' : '#9a9880',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}>
@@ -2287,10 +2366,10 @@ function ScannerTab() {
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
-                background: '#14161c',
-                border: '1px solid #2d3748',
+                background: '#0f231a',
+                border: '1px solid #2a4a3a',
                 borderRadius: 8,
-                color: '#f1f5f9',
+                color: '#e8e4d8',
                 fontFamily: MONO,
                 fontSize: 13,
                 padding: '10px 14px',
@@ -2312,8 +2391,8 @@ function ScannerTab() {
               padding: '10px 28px',
               borderRadius: 8,
               border: 'none',
-              background: loading ? '#1e2535' : '#d4a843',
-              color: loading ? '#64748b' : '#0a0d14',
+              background: loading ? '#2a4a3a' : '#c9a84c',
+              color: loading ? '#9a9880' : '#0a1a14',
               cursor: loading ? 'not-allowed' : 'pointer',
               letterSpacing: '0.5px',
               transition: 'all 0.2s',
@@ -2347,10 +2426,10 @@ function ScannerTab() {
             <div>
               {/* Summary banner */}
               <div style={{
-                background: '#14161c',
+                background: '#0f231a',
                 border: '1px solid #1e2535',
                 borderTop: `3px solid ${regimeColor}`,
-                borderRadius: 10,
+                borderRadius: 6,
                 padding: '16px 20px',
                 marginBottom: 20,
               }}>
@@ -2363,14 +2442,14 @@ function ScannerTab() {
                   }}>
                     {result.regime}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#64748b' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#9a9880' }}>
                     {fmtTs(result.timestamp)}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#9a9880', marginLeft: 'auto' }}>
                     {result.signals.length} signals
                   </span>
                 </div>
-                <div style={{ fontFamily: MONO, fontSize: 13, color: '#cbd5e1', lineHeight: 1.7 }}>
+                <div style={{ fontFamily: MONO, fontSize: 13, color: '#e8e4d8', lineHeight: 1.7 }}>
                   {result.summary}
                 </div>
               </div>
@@ -2393,7 +2472,7 @@ function ScannerTab() {
           {!result && !loading && !error && (
             <div style={{
               textAlign: 'center', padding: '60px 20px',
-              color: '#334155', fontFamily: MONO, fontSize: 13,
+              color: '#2a4a3a', fontFamily: MONO, fontSize: 13,
             }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>◈</div>
               Select a scan type and run a scan to see AI-generated market signals.
@@ -2406,22 +2485,22 @@ function ScannerTab() {
       {panel === 'history' && (
         <div>
           {scans.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#334155', fontFamily: MONO, fontSize: 13 }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#2a4a3a', fontFamily: MONO, fontSize: 13 }}>
               No scan history yet. Run your first scan.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {scans.map((scan) => {
-                const rc = REGIME_COLORS[scan.regime] || '#d4a843';
+                const rc = REGIME_COLORS[scan.regime] || '#c9a84c';
                 return (
                   <div
                     key={scan.id}
                     onClick={() => loadHistory(scan)}
                     style={{
-                      background: '#14161c',
+                      background: '#0f231a',
                       border: '1px solid #1e2535',
                       borderLeft: `3px solid ${rc}`,
-                      borderRadius: 10,
+                      borderRadius: 6,
                       padding: '14px 16px',
                       cursor: 'pointer',
                       display: 'flex',
@@ -2439,15 +2518,15 @@ function ScannerTab() {
                         }}>
                           {scan.regime}
                         </span>
-                        <span style={{ fontFamily: MONO, fontSize: 12, color: '#94a3b8' }}>
+                        <span style={{ fontFamily: MONO, fontSize: 12, color: '#9a9880' }}>
                           {SCAN_TYPES.find(s => s.id === scan.scanType)?.label || scan.scanType}
                         </span>
                       </div>
-                      <div style={{ fontFamily: MONO, fontSize: 12, color: '#64748b' }}>
+                      <div style={{ fontFamily: MONO, fontSize: 12, color: '#9a9880' }}>
                         {scan.signals.length} signals · {fmtTs(scan.timestamp)}
                       </div>
                     </div>
-                    <span style={{ color: '#334155', fontSize: 16 }}>›</span>
+                    <span style={{ color: '#2a4a3a', fontSize: 16 }}>›</span>
                   </div>
                 );
               })}
@@ -2459,8 +2538,8 @@ function ScannerTab() {
               style={{
                 marginTop: 16, fontFamily: MONO, fontSize: 12,
                 padding: '6px 14px', borderRadius: 6,
-                border: '1px solid #2d3748', background: 'transparent',
-                color: '#64748b', cursor: 'pointer',
+                border: '1px solid #2a4a3a', background: 'transparent',
+                color: '#9a9880', cursor: 'pointer',
               }}
             >
               Clear History
@@ -2473,22 +2552,22 @@ function ScannerTab() {
       {panel === 'watchlist' && (
         <div>
           {watchlist.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#334155', fontFamily: MONO, fontSize: 13 }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#2a4a3a', fontFamily: MONO, fontSize: 13 }}>
               No tickers saved. Click ☆ on any signal card to add it to your watchlist.
             </div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {watchlist.map(ticker => (
                 <div key={ticker} style={{
-                  background: '#14161c',
-                  border: '1px solid #2d3748',
+                  background: '#0f231a',
+                  border: '1px solid #2a4a3a',
                   borderRadius: 8,
                   padding: '10px 16px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
                 }}>
-                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#d4a843' }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 15, color: '#c9a84c' }}>
                     {ticker}
                   </span>
                   <button
@@ -2496,7 +2575,7 @@ function ScannerTab() {
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#ef4444',
+                      color: '#c45555',
                       cursor: 'pointer',
                       fontSize: 14,
                       padding: 0,
@@ -2516,8 +2595,8 @@ function ScannerTab() {
               style={{
                 marginTop: 16, fontFamily: MONO, fontSize: 12,
                 padding: '6px 14px', borderRadius: 6,
-                border: '1px solid #2d3748', background: 'transparent',
-                color: '#64748b', cursor: 'pointer',
+                border: '1px solid #2a4a3a', background: 'transparent',
+                color: '#9a9880', cursor: 'pointer',
               }}
             >
               Clear Watchlist

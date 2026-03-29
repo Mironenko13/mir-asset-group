@@ -11,41 +11,15 @@ const WEEKLY_GROSS = 1649;
 const MONTHLY_GROSS = Math.round(WEEKLY_GROSS * 52 / 12); // ~7145
 const TITHE_RATE = 0.10;
 
-// Legacy color map — used as fallback for positions created before dynamic buckets
-const BUCKET_COLORS = {
-  'QQQ':                 '#6366f1',
-  'Crypto':              '#f97316',
-  'Dividends':           '#5ab87a',
-  'Quantum':             '#8b5cf6',
-  'Quantum/Emerging':    '#8b5cf6',
-  'Gold':                '#c9a84c',
-  'Energy':              '#c45555',
-  'Energy/Commodities':  '#c45555',
-  'Silver':              '#9a9880',
-};
-
-// Default buckets seeded on first load (stored in mag_buckets)
-const DEFAULT_BUCKETS = [
-  { id: 'qqq',     name: 'QQQ',               color: '#6366f1' },
-  { id: 'crypto',  name: 'Crypto',             color: '#f97316' },
-  { id: 'div',     name: 'Dividends',          color: '#5ab87a' },
-  { id: 'quantum', name: 'Quantum/Emerging',   color: '#8b5cf6' },
-  { id: 'gold',    name: 'Gold',               color: '#c9a84c' },
-  { id: 'energy',  name: 'Energy/Commodities', color: '#c45555' },
-  { id: 'silver',  name: 'Silver',             color: '#9a9880' },
+// Asset class hierarchy
+const ASSET_CLASSES = [
+  { id: 'Equities',        label: 'Equities',        icon: '📈', color: '#5b8af0', sectors: ['Tech/Nasdaq','Dividends/Income','Quantum/Emerging Tech','Energy','Healthcare','Financials','Industrials','Consumer','Real Estate','Defense/Aerospace','Other'], qtyUnit: 'shares', priceUnit: '$/share' },
+  { id: 'Crypto',          label: 'Crypto',          icon: '🪙', color: '#f0a030', sectors: ['XRP','BTC','SOL','XLM','HBAR','WLFI','Other'], qtyUnit: 'tokens', priceUnit: '$/token' },
+  { id: 'Precious Metals', label: 'Precious Metals', icon: '🥇', color: '#c9a84c', sectors: ['Gold','Silver','Platinum','Palladium'], qtyUnit: 'oz t', priceUnit: '$/oz t' },
+  { id: 'Commodities',     label: 'Commodities',     icon: '🛢️', color: '#e07040', sectors: ['Energy','Agriculture','Industrial Metals','Other'], qtyUnit: 'units', priceUnit: '$/unit' },
+  { id: 'Fixed Income',    label: 'Fixed Income',    icon: '📄', color: '#7090b0', sectors: ['Treasury','Corporate Bond','Municipal','Other'], qtyUnit: 'shares', priceUnit: '$/share' },
+  { id: 'Cash',            label: 'Cash',            icon: '💵', color: '#80b080', sectors: ['USD','Money Market','Other'], qtyUnit: 'units', priceUnit: '$/unit' },
 ];
-
-const BUCKET_COLOR_PALETTE = [
-  '#6366f1','#f97316','#5ab87a','#8b5cf6','#c9a84c','#c45555',
-  '#9a9880','#06b6d4','#ec4899','#84cc16','#f59e0b','#10b981',
-];
-
-const ASSET_TYPE_META = {
-  'Security': { icon: '📈', qtyUnit: 'shares', priceUnit: '$/share' },
-  'Crypto':   { icon: '🪙', qtyUnit: 'tokens', priceUnit: '$/token' },
-  'Gold':     { icon: '🥇', qtyUnit: 'oz t',   priceUnit: '$/oz t'  },
-  'Silver':   { icon: '🥈', qtyUnit: 'oz t',   priceUnit: '$/oz t'  },
-};
 
 const EXPENSE_CATEGORIES = [
   'Housing', 'Food', 'Vehicle/Fuel', 'Homeschool', 'Tithe',
@@ -65,8 +39,6 @@ const CAT_COLORS = {
   'Investments':     '#84cc16',
   'Misc':            '#9a9880',
 };
-
-const CRYPTO_SUB_BUCKETS = ['XRP', 'WLFI', 'BTC', 'Solana', 'XLM', 'HBAR', 'Other'];
 
 // ─── Net Worth Categories ──────────────────────────────────────────────────────
 const NW_CATEGORIES = ['liquidInvestments', 'crypto', 'metals', 'cash', 'businessEquity', 'realEstate'];
@@ -391,29 +363,37 @@ function useLocalStorage(key, init) {
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // ─── Portfolio helpers ─────────────────────────────────────────────────────────
+function migratePosition(pos) {
+  if (pos.assetClass) return pos;
+  const b  = (pos.bucket    || '').toLowerCase();
+  const at = (pos.assetType || '').toLowerCase();
+  let assetClass = 'Equities', sector = 'Other';
+  if      (b.includes('crypto') || at === 'crypto')           { assetClass = 'Crypto';          sector = pos.subBucket || pos.ticker || 'Other'; }
+  else if (b.includes('gold')   || at === 'gold')             { assetClass = 'Precious Metals';  sector = 'Gold'; }
+  else if (b.includes('silver') || at === 'silver')           { assetClass = 'Precious Metals';  sector = 'Silver'; }
+  else if (b.includes('dividend'))                            { assetClass = 'Equities';         sector = 'Dividends/Income'; }
+  else if (b.includes('quantum') || b.includes('emerging'))   { assetClass = 'Equities';         sector = 'Quantum/Emerging Tech'; }
+  else if (b.includes('energy') || b.includes('commodit'))    { assetClass = 'Commodities';      sector = 'Energy'; }
+  else if (b.includes('qqq') || b.includes('tech') || b.includes('nasdaq')) { assetClass = 'Equities'; sector = 'Tech/Nasdaq'; }
+  return { ...pos, assetClass, sector };
+}
+
+function getAssetClassColor(assetClass) {
+  const ac = ASSET_CLASSES.find(a => a.id === assetClass);
+  return ac ? ac.color : '#9a9880';
+}
+
 function portfolioStats(positions) {
-  const totalValue = positions.reduce((s, p) => s + p.quantity * p.currentPrice, 0);
+  const migrated = positions.map(migratePosition);
+  const totalValue = migrated.reduce((s, p) => s + p.quantity * p.currentPrice, 0);
   const byBucket = {};
-  positions.forEach(p => {
+  migrated.forEach(p => {
     const v = p.quantity * p.currentPrice;
-    byBucket[p.bucket] = (byBucket[p.bucket] || 0) + v;
+    byBucket[p.assetClass] = (byBucket[p.assetClass] || 0) + v;
   });
   const alloc = {};
   Object.keys(byBucket).forEach(b => { alloc[b] = totalValue > 0 ? (byBucket[b] / totalValue) * 100 : 0; });
   return { totalValue, byBucket, alloc };
-}
-
-function getBucketColor(buckets, name) {
-  const b = (buckets || []).find(x => x.name === name);
-  return b ? b.color : (BUCKET_COLORS[name] || '#9a9880');
-}
-
-function inferAssetType(bucketName) {
-  const n = (bucketName || '').toLowerCase();
-  if (n.includes('crypto')) return 'Crypto';
-  if (n.includes('gold'))   return 'Gold';
-  if (n.includes('silver')) return 'Silver';
-  return 'Security';
 }
 
 function calcDriftAlerts(alloc, targets) {
@@ -541,7 +521,6 @@ export default function App() {
   const [nwMilestones,   setNwMilestones]    = useLocalStorage('mag_nw_milestones',   []);
   const [givingEntries,  setGivingEntries]   = useLocalStorage('mag_giving',          []);
   const [roadmapSavings, setRoadmapSavings]  = useLocalStorage('mag_roadmap_savings', {});
-  const [buckets,        setBuckets]         = useLocalStorage('mag_buckets',         DEFAULT_BUCKETS);
   const [targets,        setTargets]         = useLocalStorage('mag_targets',         {});
 
   const { totalValue } = useMemo(() => portfolioStats(positions), [positions]);
@@ -619,7 +598,6 @@ export default function App() {
             expenses={expenses}
             onAddExpense={e => setExpenses(p => [e, ...p])}
             onTabSwitch={switchTab}
-            buckets={buckets}
             targets={targets}
           />
         )}
@@ -627,8 +605,6 @@ export default function App() {
           <PortfolioTab
             positions={positions}
             setPositions={setPositions}
-            buckets={buckets}
-            setBuckets={setBuckets}
             targets={targets}
             setTargets={setTargets}
           />
@@ -678,7 +654,7 @@ function KpiCard({ label, value, sub, subColor, accent }) {
 }
 
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
-function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets, targets }) {
+function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets }) {
   const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
@@ -693,15 +669,14 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
   const totalPnl = totalValue - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
-  // All bucket names to show in snapshot (union of buckets array + actual positions + targets)
+  // Asset classes to show in snapshot (union of actual positions + targets)
   const snapshotBuckets = useMemo(() => {
     const names = new Set([
-      ...buckets.map(b => b.name),
       ...Object.keys(alloc).filter(k => (alloc[k] || 0) > 0),
       ...Object.keys(targets),
     ]);
     return [...names];
-  }, [buckets, alloc, targets]);
+  }, [alloc, targets]);
 
   const recentExp = expenses.slice(0, 5);
 
@@ -726,7 +701,7 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
           </div>
           {alerts.slice(0, 4).map(a => (
             <div key={a.bucket} style={S.alert}>
-              <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
+              <span style={S.tag(getAssetClassColor(a.bucket))}>{a.bucket}</span>
               <span style={{ color: '#9a9880', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
               <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#c45555' : '#5ab87a' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}%
@@ -747,7 +722,7 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
           {positions.length === 0 ? (
             <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>No positions — add them in Portfolio tab</div>
           ) : snapshotBuckets.map(name => {
-            const color = getBucketColor(buckets, name);
+            const color = getAssetClassColor(name);
             const actual = alloc[name] || 0;
             const target = targets[name];
             const hasTarget = target != null;
@@ -825,11 +800,11 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, buckets,
 }
 
 // ─── Portfolio Tab ─────────────────────────────────────────────────────────────
-function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, setTargets }) {
+function PortfolioTab({ positions, setPositions, targets, setTargets }) {
   const isMobile = useIsMobile();
   const [showAdd,       setShowAdd]       = useState(false);
   const [editPos,       setEditPos]       = useState(null);
-  const [sortKey,       setSortKey]       = useState('bucket');
+  const [sortKey,       setSortKey]       = useState('assetClass');
   const [sortDir,       setSortDir]       = useState(1);
   const [editingTarget, setEditingTarget] = useState(null);
   const [targetInput,   setTargetInput]   = useState('');
@@ -839,11 +814,10 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
   const totalCost = useMemo(() => positions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [positions]);
   const totalPnl = totalValue - totalCost;
 
-  // All bucket names for charts: union of buckets array + actual positions
+  // Asset classes present in portfolio
   const allBucketNames = useMemo(() => {
-    const names = new Set([...buckets.map(b => b.name), ...Object.keys(alloc).filter(k => (alloc[k] || 0) > 0)]);
-    return [...names];
-  }, [buckets, alloc]);
+    return Object.keys(alloc).filter(k => (alloc[k] || 0) > 0);
+  }, [alloc]);
 
   const pieData = useMemo(() => allBucketNames.map(name => ({
     name, value: Math.max(parseFloat((alloc[name] || 0).toFixed(1)), 0.01),
@@ -856,14 +830,14 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
   })), [allBucketNames, alloc, targets]);
 
   const sortedPositions = useMemo(() => {
-    return [...positions].sort((a, b) => {
-      if (sortKey === 'bucket') return a.bucket.localeCompare(b.bucket) * sortDir;
+    return positions.map(migratePosition).sort((a, b) => {
+      if (sortKey === 'assetClass') return (a.assetClass || '').localeCompare(b.assetClass || '') * sortDir;
       if (sortKey === 'ticker') return a.ticker.localeCompare(b.ticker) * sortDir;
       let av = 0, bv = 0;
-      if (sortKey === 'value')  { av = a.quantity * a.currentPrice; bv = b.quantity * b.currentPrice; }
+      if (sortKey === 'value')       { av = a.quantity * a.currentPrice; bv = b.quantity * b.currentPrice; }
       else if (sortKey === 'pnl')    { av = (a.currentPrice - a.avgCost) * a.quantity; bv = (b.currentPrice - b.avgCost) * b.quantity; }
       else if (sortKey === 'pnlPct') { av = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; bv = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; }
-      else if (sortKey === 'alloc')  { av = alloc[a.bucket] || 0; bv = alloc[b.bucket] || 0; }
+      else if (sortKey === 'alloc')  { av = alloc[a.assetClass] || 0; bv = alloc[b.assetClass] || 0; }
       return (av - bv) * sortDir;
     });
   }, [positions, sortKey, sortDir, alloc]);
@@ -907,7 +881,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
         <div style={{ marginBottom: 16 }}>
           {alerts.map(a => (
             <div key={a.bucket} style={S.alert}>
-              <span style={S.tag(getBucketColor(buckets, a.bucket))}>{a.bucket}</span>
+              <span style={S.tag(getAssetClassColor(a.bucket))}>{a.bucket}</span>
               <span style={{ color: '#9a9880', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
               <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#c45555' : '#5ab87a' }}>
                 {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}% drift
@@ -926,7 +900,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
             <ResponsiveContainer width="100%" height={190}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
-                  {pieData.map((entry) => <Cell key={entry.name} fill={getBucketColor(buckets, entry.name)} />)}
+                  {pieData.map((entry) => <Cell key={entry.name} fill={getAssetClassColor(entry.name)} />)}
                 </Pie>
                 <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
               </PieChart>
@@ -934,7 +908,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
             {/* Bucket legend + target setter */}
             <div style={{ marginTop: 8 }}>
               {allBucketNames.map(name => {
-                const color = getBucketColor(buckets, name);
+                const color = getAssetClassColor(name);
                 const tgt = targets[name];
                 return (
                   <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid #0f1117', flexWrap: 'wrap' }}>
@@ -1003,7 +977,7 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
             <table style={{ ...S.table, minWidth: 600 }}>
               <thead>
                 <tr>
-                  {[['ticker','Ticker'],['bucket','Bucket'],['value','Value'],['pnl','P&L'],['pnlPct','P&L %'],['alloc','Alloc %']].map(([k, lbl]) => (
+                  {[['ticker','Ticker'],['assetClass','Asset Class'],['value','Value'],['pnl','P&L'],['pnlPct','P&L %'],['alloc','Alloc %']].map(([k, lbl]) => (
                     <th key={k} style={S.th} onClick={() => toggleSort(k)} dangerouslySetInnerHTML={{ __html: lbl + sortIcon(k) }} />
                   ))}
                   <th style={{ ...S.th, cursor: 'default' }}>Qty / Avg / Price</th>
@@ -1016,24 +990,23 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
                   const pnl     = (pos.currentPrice - pos.avgCost) * pos.quantity;
                   const pnlPct  = pos.avgCost > 0 ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
                   const allocPct = totalValue > 0 ? (val / totalValue) * 100 : 0;
-                  const posType  = pos.assetType || inferAssetType(pos.bucket);
-                  const meta     = ASSET_TYPE_META[posType] || ASSET_TYPE_META.Security;
+                  const acMeta = ASSET_CLASSES.find(a => a.id === pos.assetClass) || ASSET_CLASSES[0];
                   return (
                     <tr key={pos.id} onDoubleClick={() => setEditPos(pos)} style={{ cursor: 'default' }}>
                       <td style={S.td}>
-                        <div style={{ fontWeight: 700, color: '#e8e4d8' }}>{meta.icon} {pos.ticker}</div>
+                        <div style={{ fontWeight: 700, color: '#e8e4d8' }}>{acMeta.icon} {pos.ticker}</div>
                         {pos.name && <div style={{ fontSize: 10, color: '#9a9880' }}>{pos.name}</div>}
                       </td>
                       <td style={S.td}>
-                        <span style={S.tag(getBucketColor(buckets, pos.bucket))}>{pos.bucket}</span>
-                        {pos.subBucket && <div style={{ fontSize: 10, color: '#9a9880', marginTop: 2 }}>{pos.subBucket}</div>}
+                        <span style={S.tag(getAssetClassColor(pos.assetClass))}>{pos.assetClass}</span>
+                        {pos.sector && <div style={{ fontSize: 10, color: '#9a9880', marginTop: 2 }}>{pos.sector}</div>}
                       </td>
                       <td style={S.td}><strong>{fmt$(val, 0)}</strong></td>
                       <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>{pnl >= 0 ? '+' : ''}{fmt$(pnl, 0)}</td>
                       <td style={{ ...S.td, ...(pnlPct >= 0 ? S.pnlPos : S.pnlNeg) }}>{fmtPct(pnlPct)}</td>
                       <td style={S.td}>{allocPct.toFixed(1)}%</td>
                       <td style={{ ...S.td, fontSize: 11, color: '#9a9880', whiteSpace: 'nowrap' }}>
-                        {pos.quantity} {meta.qtyUnit} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
+                        {pos.quantity} {acMeta.qtyUnit} &times; {fmt$(pos.avgCost)} / {fmt$(pos.currentPrice)}
                       </td>
                       <td style={S.td}>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -1065,8 +1038,6 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
       {(showAdd || editPos) && (
         <AddPositionModal
           position={editPos}
-          buckets={buckets}
-          setBuckets={setBuckets}
           onSave={handleSave}
           onClose={() => { setShowAdd(false); setEditPos(null); }}
         />
@@ -1076,37 +1047,30 @@ function PortfolioTab({ positions, setPositions, buckets, setBuckets, targets, s
 }
 
 // ─── Add Position Modal ────────────────────────────────────────────────────────
-function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
+function AddPositionModal({ position, onSave, onClose }) {
   const isMobile = useIsMobile();
-  const defaultBucket = position?.bucket || buckets[0]?.name || '';
+  const initPos = position ? migratePosition(position) : null;
 
-  const [ticker,         setTicker]         = useState(position?.ticker       || '');
-  const [name,           setName]           = useState(position?.name         || '');
-  const [bucket,         setBucket]         = useState(defaultBucket);
-  const [subBucket,      setSubBucket]      = useState(position?.subBucket    || '');
-  const [quantity,       setQuantity]       = useState(position?.quantity     != null ? String(position.quantity)     : '');
-  const [avgCost,        setAvgCost]        = useState(position?.avgCost      != null ? String(position.avgCost)      : '');
-  const [currentPrice,   setCurrentPrice]   = useState(position?.currentPrice != null ? String(position.currentPrice) : '');
-  const [assetType,      setAssetType]      = useState(position?.assetType    || inferAssetType(defaultBucket));
-  const [creatingBucket, setCreatingBucket] = useState(false);
-  const [newBucketName,  setNewBucketName]  = useState('');
-  const [newBucketColor, setNewBucketColor] = useState(BUCKET_COLOR_PALETTE[0]);
+  const [assetClass,   setAssetClass]   = useState(initPos?.assetClass || 'Equities');
+  const [sector,       setSector]       = useState(initPos?.sector     || '');
+  const [ticker,       setTicker]       = useState(initPos?.ticker       || '');
+  const [name,         setName]         = useState(initPos?.name         || '');
+  const [quantity,     setQuantity]     = useState(initPos?.quantity     != null ? String(initPos.quantity)     : '');
+  const [avgCost,      setAvgCost]      = useState(initPos?.avgCost      != null ? String(initPos.avgCost)      : '');
+  const [currentPrice, setCurrentPrice] = useState(initPos?.currentPrice != null ? String(initPos.currentPrice) : '');
   const tickerRef = useRef(null);
 
   useEffect(() => { if (!position && tickerRef.current) tickerRef.current.focus(); }, [position]);
 
-  // Auto-infer asset type when bucket changes (only for new positions)
-  const prevBucket = useRef(bucket);
+  const prevClass = useRef(assetClass);
   useEffect(() => {
-    if (!position && bucket !== prevBucket.current) {
-      setAssetType(inferAssetType(bucket));
-      prevBucket.current = bucket;
+    if (assetClass !== prevClass.current) {
+      setSector('');
+      prevClass.current = assetClass;
     }
-  }, [bucket, position]);
+  }, [assetClass]);
 
-  const isCryptoBucket = bucket.toLowerCase().includes('crypto');
-  const meta = ASSET_TYPE_META[assetType] || ASSET_TYPE_META['Security'];
-
+  const acDef = ASSET_CLASSES.find(a => a.id === assetClass) || ASSET_CLASSES[0];
   const qty = parseFloat(quantity);
   const avg = parseFloat(avgCost);
   const cur = parseFloat(currentPrice);
@@ -1114,24 +1078,14 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
   const liveVal = canSave ? qty * cur : null;
   const livePnl = canSave ? (cur - avg) * qty : null;
 
-  const commitNewBucket = () => {
-    if (!newBucketName.trim()) return;
-    const nb = { id: genId(), name: newBucketName.trim(), color: newBucketColor };
-    setBuckets(p => [...p, nb]);
-    setBucket(nb.name);
-    setCreatingBucket(false);
-    setNewBucketName('');
-  };
-
   const handleSave = () => {
     if (!canSave) return;
     onSave({
       ...position,
       ticker:       ticker.trim().toUpperCase(),
       name:         name.trim(),
-      bucket,
-      subBucket:    isCryptoBucket ? subBucket : '',
-      assetType,
+      assetClass,
+      sector,
       quantity:     qty,
       avgCost:      avg,
       currentPrice: cur,
@@ -1147,85 +1101,57 @@ function AddPositionModal({ position, buckets, setBuckets, onSave, onClose }) {
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 460, margin: isMobile ? '0 12px' : undefined }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 480, margin: isMobile ? '0 12px' : undefined }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 16 }}>
           {position ? 'Edit Position' : 'Add Position'}
         </div>
 
-        {/* ── Bucket selector ── */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Bucket *</label>
-          {!creatingBucket ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select value={bucket} onChange={e => { if (e.target.value === '__new__') setCreatingBucket(true); else setBucket(e.target.value); }} style={{ ...S.selectStyle, flex: 1 }}>
-                {buckets.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                <option value="__new__">+ Create new bucket…</option>
-              </select>
-              <div style={{ width: 28, height: 36, borderRadius: 6, background: getBucketColor(buckets, bucket), flexShrink: 0 }} />
-            </div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input autoFocus value={newBucketName} onChange={e => setNewBucketName(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitNewBucket()} placeholder="Bucket name" style={{ ...S.inputStyle, flex: 1 }} />
-                <button style={{ ...S.btn, padding: '9px 14px', flexShrink: 0, minHeight: 40 }} onClick={commitNewBucket}>Add</button>
-                <button style={{ ...S.btnGhost, padding: '9px 12px', flexShrink: 0, minHeight: 40 }} onClick={() => setCreatingBucket(false)}>✕</button>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {BUCKET_COLOR_PALETTE.map(c => (
-                  <div key={c} onClick={() => setNewBucketColor(c)} style={{ width: 24, height: 24, borderRadius: 4, background: c, cursor: 'pointer', border: `2px solid ${newBucketColor === c ? '#fff' : 'transparent'}` }} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Asset type ── */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Asset Type</label>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {Object.entries(ASSET_TYPE_META).map(([type, m]) => (
-              <button key={type} onClick={() => setAssetType(type)} style={{
-                flex: 1, minWidth: 80, padding: '7px 6px', borderRadius: 7, minHeight: 40,
-                border: `1px solid ${assetType === type ? '#c9a84c' : '#2a4a3a'}`,
-                background: assetType === type ? 'rgba(201,168,76,0.1)' : '#132b21',
-                color: assetType === type ? '#c9a84c' : '#9a9880',
-                fontSize: 12, cursor: 'pointer',
+        {/* ── Asset Class selector ── */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 11, color: C.textSec, marginBottom: 6, fontWeight: 600 }}>Asset Class *</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {ASSET_CLASSES.map(ac => (
+              <button key={ac.id} onClick={() => setAssetClass(ac.id)} style={{
+                padding: '9px 6px', borderRadius: 7, minHeight: 52,
+                border: `1px solid ${assetClass === ac.id ? ac.color : C.border}`,
+                background: assetClass === ac.id ? ac.color + '18' : C.bgInput,
+                color: assetClass === ac.id ? ac.color : C.textSec,
+                fontSize: 12, cursor: 'pointer', textAlign: 'center',
               }}>
-                {m.icon} {type}
+                <div style={{ fontSize: 18, marginBottom: 2 }}>{ac.icon}</div>
+                <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.3px' }}>{ac.label}</div>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Ticker + Name ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-          <div>{fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'QQQ', ref: tickerRef })}</div>
-          <div>{fld('Name / Label', name, setName, { placeholder: 'Invesco QQQ Trust' })}</div>
+        {/* ── Sector / Sub-type ── */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 11, color: C.textSec, marginBottom: 4, fontWeight: 600 }}>Sector / Type</label>
+          <select value={sector} onChange={e => setSector(e.target.value)} style={S.selectStyle}>
+            <option value="">— select —</option>
+            {acDef.sectors.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
 
-        {/* ── Crypto sub-bucket ── */}
-        {isCryptoBucket && (
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Sub-Bucket</label>
-            <select value={subBucket} onChange={e => setSubBucket(e.target.value)} style={S.selectStyle}>
-              <option value="">&#8212; select &#8212;</option>
-              {CRYPTO_SUB_BUCKETS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        )}
+        {/* ── Ticker + Name ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+          <div>{fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), { placeholder: assetClass === 'Crypto' ? 'XRP' : assetClass === 'Precious Metals' ? 'GOLD' : 'QQQ', ref: tickerRef })}</div>
+          <div>{fld('Name / Label', name, setName, { placeholder: assetClass === 'Crypto' ? 'Ripple XRP' : 'Position name' })}</div>
+        </div>
 
         {/* ── Numeric fields ── */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 10 }}>
-          <div>{fld(`Quantity (${meta.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}</div>
-          <div>{fld(`Avg Cost (${meta.priceUnit}) *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
-          <div>{fld(`Cur. Price (${meta.priceUnit}) *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
+          <div>{fld(`Qty (${acDef.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}</div>
+          <div>{fld(`Avg Cost (${acDef.priceUnit}) *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
+          <div>{fld(`Price (${acDef.priceUnit}) *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}</div>
         </div>
 
         {canSave && (
-          <div style={{ background: '#132b21', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 16 }}>
-            <span style={{ color: '#9a9880' }}>Value: <strong style={{ color: '#c9a84c' }}>{fmt$(liveVal, 0)}</strong></span>
-            <span style={{ color: '#9a9880' }}>P&L: <strong style={{ color: livePnl >= 0 ? '#5ab87a' : '#c45555' }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>
+          <div style={{ background: C.bgInput, borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 16 }}>
+            <span style={{ color: C.textSec }}>Value: <strong style={{ color: C.gold }}>{fmt$(liveVal, 0)}</strong></span>
+            <span style={{ color: C.textSec }}>P&L: <strong style={{ color: livePnl >= 0 ? C.green : C.red }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>
           </div>
         )}
 

@@ -405,26 +405,26 @@ function calcDriftAlerts(alloc, targets) {
 
 // ─── Globe Icon ────────────────────────────────────────────────────────────────
 function GlobeIcon({ size = 24, color = '#c9a84c' }) {
-  const rawId = useId();
-  const clipId = 'gc' + rawId.replace(/[^a-z0-9]/gi, '');
+  const uid = useId().replace(/[^a-z0-9]/gi, '');
+  const cid = `gc${uid}`;
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, display: 'block' }}>
       <defs>
-        <clipPath id={clipId}>
-          <circle cx="12" cy="12" r="9.6" />
+        <clipPath id={cid}>
+          <circle cx="12" cy="12" r="10.5" />
         </clipPath>
       </defs>
       {/* Outer ring */}
-      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.2" />
-      <g clipPath={`url(#${clipId})`}>
-        {/* Equator */}
-        <ellipse cx="12" cy="12" rx="10" ry="3.2" stroke={color} strokeWidth="1" />
+      <circle cx="12" cy="12" r="10.5" stroke={color} strokeWidth="0.8" />
+      <g clipPath={`url(#${cid})`}>
         {/* Upper latitude */}
-        <ellipse cx="12" cy="7" rx="10" ry="2.3" stroke={color} strokeWidth="0.75" />
+        <ellipse cx="12" cy="6.8"  rx="10.5" ry="2.0" stroke={color} strokeWidth="0.5" />
+        {/* Equator */}
+        <ellipse cx="12" cy="12"   rx="10.5" ry="3.4" stroke={color} strokeWidth="0.65" />
         {/* Lower latitude */}
-        <ellipse cx="12" cy="17" rx="10" ry="2.3" stroke={color} strokeWidth="0.75" />
+        <ellipse cx="12" cy="17.2" rx="10.5" ry="2.0" stroke={color} strokeWidth="0.5" />
         {/* Vertical meridian */}
-        <ellipse cx="12" cy="12" rx="3.8" ry="10" stroke={color} strokeWidth="1" />
+        <ellipse cx="12" cy="12"   rx="3.6"  ry="10.5" stroke={color} strokeWidth="0.65" />
       </g>
     </svg>
   );

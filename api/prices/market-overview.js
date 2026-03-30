@@ -1,8 +1,18 @@
-// Market Overview API
-// Stocks/ETFs/Futures/Forex: Yahoo Finance (free, no key)
-// Crypto: CoinGecko (free, no key)
-// Metals: Alpha Vantage CURRENCY_EXCHANGE_RATE for XAU/USD and XAG/USD (ALPHA_VANTAGE_API_KEY)
-// Cache-Control: s-maxage=300 (Vercel CDN caches for 5 min)
+// Market Overview API — all data handled server-side, one combined response
+//
+// Sources:
+//   Crypto       → CoinGecko (free, no key) — runs in parallel
+//   Stocks/ETFs  → Alpha Vantage GLOBAL_QUOTE, sequential, 1 s apart
+//   Metals       → Alpha Vantage CURRENCY_EXCHANGE_RATE (XAU/USD, XAG/USD)
+//   Oil & Gas    → Alpha Vantage WTI + NATURAL_GAS function endpoints
+//   Forex        → Alpha Vantage CURRENCY_EXCHANGE_RATE (EUR/USD, USD/JPY, GBP/JPY)
+//   DXY proxy    → UUP ETF via GLOBAL_QUOTE, stored under 'DX-Y.NYB' key
+//
+// Rate-limit handling: 1 s delay between calls; if AV returns a rate-limit
+// Note/Information message, wait 12 s and retry once per ticker.
+//
+// Per-ticker cache persists across warm serverless invocations (in-process Map).
+// Time budget: bail out after BUDGET_MS so the function never hard-times-out.
 
 const COIN_MAP = {
   BTC:  'bitcoin',
@@ -13,106 +23,124 @@ const COIN_MAP = {
   HBAR: 'hedera-hashgraph',
 };
 
-// All Yahoo Finance symbols to fetch in one batch
-const YF_SYMBOLS = [
-  // Indexes / ETFs
-  'SPY', 'QQQ', 'DIA', 'IWM',
-  // Commodities (futures + ETFs)
-  'CL=F', 'NG=F', 'URA', 'CCJ',
-  // Tech
-  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'TSLA',
-  // Quantum / Emerging
-  'IONQ', 'QBTS', 'RGTI', 'QTUM',
-  // Energy
-  'XOM', 'CVX', 'NEE',
-  // Defense
-  'LMT', 'RTX', 'NOC', 'PLTR',
-  // Healthcare
-  'UNH', 'PFE', 'LLY', 'ISRG',
-  // Financials (BRK.B → BRK-B in Yahoo)
-  'JPM', 'BRK-B', 'GS',
-  // Forex
-  'DX-Y.NYB', 'EURUSD=X', 'USDJPY=X', 'GBPJPY=X',
+// Ordered task list — priority order ensures the most visible sections
+// (Indexes, Commodities/Metals) are fetched first within any time budget.
+const AV_TASKS = [
+  // ── Metals (CURRENCY_EXCHANGE_RATE) ────────────────────────────────────────
+  { type: 'fx',  from: 'XAU', to: 'USD', tk: 'GOLD',     name: 'Gold ($/oz t)'   },
+  { type: 'fx',  from: 'XAG', to: 'USD', tk: 'SILVER',   name: 'Silver ($/oz t)' },
+  // ── Oil & Gas (commodity function endpoints) ─────────────────────────────
+  { type: 'cmd', fn: 'WTI',         tk: 'CL=F', name: 'Crude Oil WTI' },
+  { type: 'cmd', fn: 'NATURAL_GAS', tk: 'NG=F', name: 'Natural Gas'   },
+  // ── Indexes ──────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'SPY' },
+  { type: 'eq',  sym: 'QQQ' },
+  { type: 'eq',  sym: 'DIA' },
+  { type: 'eq',  sym: 'IWM' },
+  // ── Commodity ETFs ────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'URA' },
+  { type: 'eq',  sym: 'CCJ' },
+  // ── Tech ──────────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'AAPL'  },
+  { type: 'eq',  sym: 'MSFT'  },
+  { type: 'eq',  sym: 'NVDA'  },
+  { type: 'eq',  sym: 'GOOGL' },
+  { type: 'eq',  sym: 'AMZN'  },
+  { type: 'eq',  sym: 'TSLA'  },
+  // ── Forex (CURRENCY_EXCHANGE_RATE + UUP proxy for DXY) ───────────────────
+  { type: 'eq',  sym: 'UUP', tk: 'DX-Y.NYB', name: 'Dollar Index (UUP)' },
+  { type: 'fx',  from: 'EUR', to: 'USD', tk: 'EURUSD=X', name: 'EUR / USD' },
+  { type: 'fx',  from: 'USD', to: 'JPY', tk: 'USDJPY=X', name: 'USD / JPY' },
+  { type: 'fx',  from: 'GBP', to: 'JPY', tk: 'GBPJPY=X', name: 'GBP / JPY' },
+  // ── Quantum / Emerging ────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'IONQ' },
+  { type: 'eq',  sym: 'QBTS' },
+  { type: 'eq',  sym: 'RGTI' },
+  { type: 'eq',  sym: 'QTUM' },
+  // ── Energy ────────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'XOM' },
+  { type: 'eq',  sym: 'CVX' },
+  { type: 'eq',  sym: 'NEE' },
+  // ── Defense ───────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'LMT'  },
+  { type: 'eq',  sym: 'RTX'  },
+  { type: 'eq',  sym: 'NOC'  },
+  { type: 'eq',  sym: 'PLTR' },
+  // ── Healthcare ────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'UNH'  },
+  { type: 'eq',  sym: 'PFE'  },
+  { type: 'eq',  sym: 'LLY'  },
+  { type: 'eq',  sym: 'ISRG' },
+  // ── Financials ────────────────────────────────────────────────────────────
+  { type: 'eq',  sym: 'JPM'   },
+  { type: 'eq',  sym: 'BRK-B' },
+  { type: 'eq',  sym: 'GS'    },
 ];
 
-// Simple server-side in-process cache (works within a warm serverless instance)
-let _cache = null;
-let _cacheTs = 0;
-const CACHE_MS = 5 * 60 * 1000;
+// ── Per-ticker in-process cache ──────────────────────────────────────────────
+// Survives across warm invocations; keyed by canonical ticker / 'sym' value.
+const _cache = new Map(); // key → { data: PriceEntry, ts: number }
+const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-async function fetchYahooFinance() {
-  const prices = {};
-  const failed = [];
-  const symbols = YF_SYMBOLS.join(',');
+function cacheGet(key) {
+  const e = _cache.get(key);
+  if (!e || Date.now() - e.ts > CACHE_TTL) return null;
+  return e.data;
+}
+function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }); }
 
-  try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,shortName`;
-    const resp = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(12000),
-    });
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    if (!resp.ok) {
-      YF_SYMBOLS.forEach(s => failed.push(s));
-      return { prices, failed };
-    }
-
-    const data = await resp.json();
-    const results = data?.quoteResponse?.result || [];
-    const found = new Set();
-
-    results.forEach(q => {
-      const price = q.regularMarketPrice;
-      if (price != null && price > 0) {
-        const change    = q.regularMarketChange ?? 0;
-        const changePct = q.regularMarketChangePercent ?? 0;
-        prices[q.symbol] = {
-          price,
-          change,
-          changePct,
-          name: q.shortName || q.displayName || q.symbol,
-        };
-        found.add(q.symbol);
-      } else {
-        failed.push(q.symbol);
-        found.add(q.symbol);
-      }
-    });
-
-    // Mark any symbols not returned at all as failed
-    YF_SYMBOLS.forEach(s => { if (!found.has(s)) failed.push(s); });
-
-  } catch {
-    YF_SYMBOLS.forEach(s => failed.push(s));
-  }
-
-  return { prices, failed };
+function isRateLimited(data) {
+  const msg = (data?.Note || data?.Information || '');
+  return typeof msg === 'string' && (
+    msg.includes('API call frequency') ||
+    msg.includes('rate limit') ||
+    msg.includes('25 requests per day') ||
+    msg.includes('standard API call frequency')
+  );
 }
 
+async function avFetch(url) {
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) return { ok: false };
+    const data = await resp.json();
+    if (isRateLimited(data)) return { ok: false, rateLimited: true, data };
+    return { ok: true, data };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function avFetchWithRetry(url) {
+  const r = await avFetch(url);
+  if (r.rateLimited) {
+    await sleep(12000); // wait 12 s then retry once
+    return avFetch(url);
+  }
+  return r;
+}
+
+// ── CoinGecko (crypto) ───────────────────────────────────────────────────────
 async function fetchCoinGecko() {
   const prices = {};
   const failed = [];
   const ids = Object.values(COIN_MAP).join(',');
-
   try {
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-    const resp = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(10000),
-    });
+    const url  = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+    const resp = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
     if (!resp.ok) throw new Error(`CoinGecko ${resp.status}`);
     const data = await resp.json();
-
     Object.entries(COIN_MAP).forEach(([ticker, cgId]) => {
       const entry = data[cgId];
       if (entry?.usd != null) {
         const price     = entry.usd;
         const changePct = entry.usd_24h_change ?? 0;
-        prices[ticker]  = { price, change: price * (changePct / 100), changePct, name: ticker };
+        const priceData = { price, change: price * (changePct / 100), changePct, name: ticker };
+        prices[ticker]  = priceData;
+        cacheSet(ticker, priceData);
       } else {
         failed.push(ticker);
       }
@@ -120,68 +148,138 @@ async function fetchCoinGecko() {
   } catch {
     Object.keys(COIN_MAP).forEach(t => failed.push(t));
   }
-
   return { prices, failed };
 }
 
-async function fetchMetals(apiKey) {
-  const prices = {};
-  const failed = [];
+// ── Alpha Vantage — all non-crypto, sequential ───────────────────────────────
+async function fetchAllAV(apiKey, startTime, budgetMs) {
+  const prices      = {};
+  const failed      = [];
+  const rateLimited = [];
 
-  const METAL_PAIRS = [
-    { from: 'XAU', ticker: 'GOLD',   name: 'Gold ($/oz t)'   },
-    { from: 'XAG', ticker: 'SILVER', name: 'Silver ($/oz t)' },
-  ];
+  for (let i = 0; i < AV_TASKS.length; i++) {
+    const task = AV_TASKS[i];
 
-  // Parallel — only 2 calls, well within AV 5/min free-tier limit
-  await Promise.allSettled(METAL_PAIRS.map(async ({ from, ticker, name }) => {
-    try {
-      const url  = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${from}&to_currency=USD&apikey=${apiKey}`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!resp.ok) { failed.push(ticker); return; }
-      const data  = await resp.json();
-      const rate  = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
-      const price = rate ? parseFloat(rate) : null;
-      if (price != null && price > 0) {
-        prices[ticker] = { price, change: 0, changePct: 0, name };
-      } else {
-        failed.push(ticker);
+    // Bail if we've burned through the time budget — return partial results.
+    // Remaining tickers will show as blank; user can Refresh again (cache fills in).
+    if (Date.now() - startTime > budgetMs) break;
+
+    const { type } = task;
+    // Resolve the canonical cache key and the key used in the prices output
+    const cacheKey = task.sym || task.tk;  // 'UUP', 'GOLD', 'EURUSD=X', 'CL=F', …
+    const storeKey = task.tk || task.sym;  // 'DX-Y.NYB' for UUP, otherwise same as cacheKey
+
+    // ── Serve from cache if fresh ────────────────────────────────────────────
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      prices[storeKey] = cached;
+      continue; // No sleep needed — no AV call made
+    }
+
+    let entry = null;
+    let rl    = false;
+
+    // ── GLOBAL_QUOTE (stocks / ETFs) ─────────────────────────────────────────
+    if (type === 'eq') {
+      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(task.sym)}&apikey=${apiKey}`;
+      const r   = await avFetchWithRetry(url);
+      if (r.rateLimited) {
+        rl = true;
+      } else if (r.ok) {
+        const q     = r.data?.['Global Quote'];
+        const price = q?.['05. price'] ? parseFloat(q['05. price']) : null;
+        if (price && price > 0) {
+          const change    = parseFloat(q['09. change'] || '0');
+          const changePct = parseFloat((q['10. change percent'] || '0%').replace('%', ''));
+          entry = { price, change, changePct, name: task.name || task.sym };
+        }
       }
-    } catch { failed.push(ticker); }
-  }));
 
-  return { prices, failed };
+    // ── CURRENCY_EXCHANGE_RATE (metals + forex) ──────────────────────────────
+    } else if (type === 'fx') {
+      const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${task.from}&to_currency=${task.to}&apikey=${apiKey}`;
+      const r   = await avFetchWithRetry(url);
+      if (r.rateLimited) {
+        rl = true;
+      } else if (r.ok) {
+        const rate  = r.data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
+        const price = rate ? parseFloat(rate) : null;
+        if (price && price > 0) {
+          entry = { price, change: 0, changePct: 0, name: task.name };
+        }
+      }
+
+    // ── Commodity function (WTI / NATURAL_GAS) ──────────────────────────────
+    } else if (type === 'cmd') {
+      const url  = `https://www.alphavantage.co/query?function=${task.fn}&interval=daily&apikey=${apiKey}`;
+      const r    = await avFetchWithRetry(url);
+      if (r.rateLimited) {
+        rl = true;
+      } else if (r.ok) {
+        const series = r.data?.data;
+        if (Array.isArray(series) && series.length >= 2) {
+          const today = parseFloat(series[0].value);
+          const prev  = parseFloat(series[1].value);
+          if (today > 0) {
+            const change    = today - prev;
+            const changePct = prev > 0 ? (change / prev) * 100 : 0;
+            entry = { price: today, change, changePct, name: task.name };
+          }
+        }
+      }
+    }
+
+    // ── Record result ────────────────────────────────────────────────────────
+    if (entry) {
+      prices[storeKey] = entry;
+      cacheSet(cacheKey, entry);
+    } else if (rl) {
+      rateLimited.push(storeKey);
+    } else {
+      failed.push(storeKey);
+    }
+
+    // 1-second gap between AV calls (not after cache hits, not after the last task)
+    if (i < AV_TASKS.length - 1) await sleep(1000);
+  }
+
+  return { prices, failed, rateLimited };
 }
 
+// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Warm-instance in-process cache
-  if (_cache && Date.now() - _cacheTs < CACHE_MS) {
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=120');
-    return res.status(200).json({ ..._cache, cached: true });
-  }
+  const avApiKey  = process.env.ALPHA_VANTAGE_API_KEY;
+  const startTime = Date.now();
 
-  const avApiKey = process.env.ALPHA_VANTAGE_API_KEY;
+  // Budget: 25 s — gives plenty of room on Vercel Pro (60 s default) and
+  // still returns well-prioritised partial results on shorter timeouts.
+  // On the first cold load with an empty cache and AV free-tier rate limits,
+  // the top-priority tickers (metals, oil/gas, indexes) will fit inside 8–9 s.
+  const BUDGET_MS = 25000;
 
-  const [yfRes, cgRes, mRes] = await Promise.allSettled([
-    fetchYahooFinance(),
+  // CoinGecko (crypto) runs in parallel with all AV sequential calls.
+  const [cryptoResult, avResult] = await Promise.all([
     fetchCoinGecko(),
-    // Metals gracefully skipped (empty) if AV key absent — stocks/crypto still return
-    avApiKey ? fetchMetals(avApiKey) : Promise.resolve({ prices: {}, failed: ['GOLD', 'SILVER'] }),
+    avApiKey
+      ? fetchAllAV(avApiKey, startTime, BUDGET_MS)
+      : Promise.resolve({ prices: {}, failed: [], rateLimited: [] }),
   ]);
 
-  const prices = {};
-  const failed = [];
+  const prices      = { ...avResult.prices, ...cryptoResult.prices };
+  const failed      = [...avResult.failed, ...cryptoResult.failed];
+  const rateLimited = avResult.rateLimited || [];
 
-  if (yfRes.status === 'fulfilled') { Object.assign(prices, yfRes.value.prices); failed.push(...yfRes.value.failed); }
-  if (cgRes.status === 'fulfilled') { Object.assign(prices, cgRes.value.prices); failed.push(...cgRes.value.failed); }
-  if (mRes.status  === 'fulfilled') { Object.assign(prices, mRes.value.prices);  failed.push(...mRes.value.failed);  }
+  // If no AV key, surface a clear error alongside whatever crypto we got.
+  const extra = avApiKey ? {} : { error: 'ALPHA_VANTAGE_API_KEY not configured — only crypto prices available' };
 
-  const result = { prices, failed, timestamp: new Date().toISOString() };
-  _cache   = result;
-  _cacheTs = Date.now();
-
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=120');
-  return res.status(200).json(result);
+  res.setHeader('Cache-Control', 'no-store'); // rely on in-process per-ticker cache
+  return res.status(200).json({
+    prices,
+    failed,
+    rateLimited,
+    timestamp: new Date().toISOString(),
+    ...extra,
+  });
 }

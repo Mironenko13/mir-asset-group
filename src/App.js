@@ -3557,7 +3557,7 @@ function ScannerTab() {
 }
 
 // ─── Markets Tab ───────────────────────────────────────────────────────────────
-function TickerRow({ ticker, priceData }) {
+function TickerRow({ ticker, priceData, isRateLimited, sectionLoading }) {
   const chg = priceData ? fmtMktChange(priceData.change, priceData.changePct) : null;
 
   return (
@@ -3585,6 +3585,10 @@ function TickerRow({ ticker, priceData }) {
             {chg.icon} {chg.text}
           </div>
         </div>
+      ) : isRateLimited ? (
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold }}>Rate limited — try in 1 min</div>
+      ) : sectionLoading ? (
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, opacity: 0.5 }}>…</div>
       ) : (
         <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted }}>—</div>
       )}
@@ -3592,19 +3596,32 @@ function TickerRow({ ticker, priceData }) {
   );
 }
 
-function MarketSectionCard({ section, prices, isMobile }) {
+function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile }) {
+  const anyData = section.tickers.some(t => prices[t.symbol]);
   return (
     <div style={{ ...S.card, marginBottom: 14 }}>
       <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         fontFamily: SERIF, fontSize: 11, fontWeight: 700,
         color: C.gold, letterSpacing: '2px', textTransform: 'uppercase',
         marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
       }}>
-        {section.label}
+        <span>{section.label}</span>
+        {loading && !anyData && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, fontWeight: 400, letterSpacing: '1px' }}>
+            Fetching…
+          </span>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)' }}>
         {section.tickers.map(t => (
-          <TickerRow key={t.symbol} ticker={t} priceData={prices ? (prices[t.symbol] || null) : null} />
+          <TickerRow
+            key={t.symbol}
+            ticker={t}
+            priceData={prices[t.symbol] || null}
+            isRateLimited={rateLimitedSet.has(t.symbol)}
+            sectionLoading={loading && !prices[t.symbol]}
+          />
         ))}
       </div>
     </div>
@@ -3651,55 +3668,78 @@ function MarketSnapshotStrip({ onTabSwitch }) {
 }
 
 function MarketsTab() {
-  const isMobile = useIsMobile();
-  const [prices,  setPrices]  = useState(() => {
+  const isMobile   = useIsMobile();
+  const pricesRef  = useRef(null);
+
+  const [prices,      setPrices]      = useState(() => {
     try {
       const raw = localStorage.getItem('mag_market_prices');
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+      const p   = raw ? JSON.parse(raw) : {};
+      pricesRef.current = p;
+      return p;
+    } catch { pricesRef.current = {}; return {}; }
   });
-  const [lastTs,  setLastTs]  = useState(() => {
+  const [lastTs,      setLastTs]      = useState(() => {
     try {
       const ts = localStorage.getItem('mag_market_prices_ts');
       return ts ? parseInt(ts, 10) : null;
     } catch { return null; }
   });
-  const [loading, setLoading] = useState(false);
-  const [failed,  setFailed]  = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [rateLimited, setRateLimited] = useState(new Set());
+  const [fetchError,  setFetchError]  = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setRateLimited(new Set());
+    setFetchError(null);
     try {
       const resp = await fetch('/api/prices/market-overview');
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const p    = data.prices || {};
-      const ts   = Date.now();
-      setPrices(p);
-      setFailed(data.failed || []);
+      const data     = await resp.json();
+      const incoming = data.prices || {};
+      // Merge new prices into existing cache — preserves data for tickers
+      // that weren't fetched this round (time budget, partial result).
+      const merged   = { ...(pricesRef.current || {}), ...incoming };
+      pricesRef.current = merged;
+      setPrices(merged);
+      setRateLimited(new Set(data.rateLimited || []));
+      if (data.error) setFetchError(data.error);
+      const ts = Date.now();
       setLastTs(ts);
       try {
-        localStorage.setItem('mag_market_prices', JSON.stringify(p));
+        localStorage.setItem('mag_market_prices', JSON.stringify(merged));
         localStorage.setItem('mag_market_prices_ts', String(ts));
       } catch {}
-    } catch {}
-    finally { setLoading(false); }
+    } catch (e) {
+      setFetchError('Network error — check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const minAgo = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+  const minAgo     = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+  const hasData    = Object.keys(prices).length > 0;
+  const subTitle   = loading
+    ? 'Fetching prices — high-priority sections load first…'
+    : minAgo != null
+      ? `Last updated: ${minAgo === 0 ? 'just now' : minAgo + 'm ago'}`
+      : 'No data cached — tap Refresh to load';
 
   return (
     <div>
+      {/* ── Header row ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontFamily: SERIF, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
             Markets
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted }}>
-            {minAgo != null
-              ? `Last updated: ${minAgo === 0 ? 'just now' : minAgo + 'm ago'}`
-              : 'No data cached — tap Refresh to load'}
+          <div style={{ fontFamily: MONO, fontSize: 11, color: loading ? C.gold : C.textMuted }}>
+            {subTitle}
           </div>
+          {fetchError && (
+            <div style={{ fontFamily: MONO, fontSize: 10, color: C.red, marginTop: 4 }}>{fetchError}</div>
+          )}
         </div>
         <button
           style={{ ...S.btn, padding: '9px 22px', fontSize: 13, flexShrink: 0 }}
@@ -3710,18 +3750,24 @@ function MarketsTab() {
         </button>
       </div>
 
-      {prices === null && !loading && (
+      {/* ── No-data empty state ── */}
+      {!hasData && !loading && (
         <div style={{ ...S.card, textAlign: 'center', padding: '40px 20px', color: C.textMuted, fontFamily: MONO, fontSize: 13 }}>
-          Tap <strong style={{ color: C.gold }}>Refresh Prices</strong> to load market data for the first time.
+          Tap <strong style={{ color: C.gold }}>Refresh Prices</strong> to load market data.
+          <div style={{ marginTop: 8, fontSize: 11, color: C.textMuted }}>
+            Indexes, metals, and oil load first. All sections fill in progressively.
+          </div>
         </div>
       )}
 
-      {prices !== null && MARKET_SECTIONS.map(section => (
+      {/* ── Sections — visible immediately once loading starts or data exists ── */}
+      {(hasData || loading) && MARKET_SECTIONS.map(section => (
         <MarketSectionCard
           key={section.id}
           section={section}
           prices={prices}
-          failed={failed}
+          rateLimitedSet={rateLimited}
+          loading={loading}
           isMobile={isMobile}
         />
       ))}

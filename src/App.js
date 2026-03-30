@@ -657,6 +657,7 @@ export default function App() {
         ::-webkit-scrollbar { width: 6px; background: #0a1a14; }
         ::-webkit-scrollbar-thumb { background: #2a4a3a; border-radius: 3px; }
         option { background: #132b21; color: #e8e4d8; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
       <header style={{ ...S.header, height: isMobile ? 52 : 58 }}>
@@ -671,44 +672,85 @@ export default function App() {
           )}
         </div>
 
-        {isMobile ? (
-          <button onClick={() => setMenuOpen(m => !m)} style={{ background: 'none', border: 'none', color: C.gold, fontSize: 22, cursor: 'pointer', padding: '8px 4px', lineHeight: 1 }}>
-            {menuOpen ? '✕' : '☰'}
-          </button>
-        ) : (
           <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
             {tabs.map(t => (
               <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => switchTab(t.id)}>{t.label}</button>
             ))}
           </nav>
-        )}
       </header>
 
-      {/* Mobile full-screen nav overlay */}
-      {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: C.bgPrimary, zIndex: 200, display: 'flex', flexDirection: 'column', paddingTop: 52 }}>
-          <div style={{ padding: '16px 24px 8px', fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>Navigation</div>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => switchTab(t.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '16px 24px', background: 'none', border: 'none',
-              borderBottom: `1px solid ${C.border}`,
-              color: tab === t.id ? C.gold : C.textSec,
-              fontFamily: MONO, fontWeight: tab === t.id ? 700 : 400,
-              fontSize: 15, cursor: 'pointer', textAlign: 'left',
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: tab === t.id ? C.gold : 'transparent', border: `1px solid ${tab === t.id ? C.gold : C.border}`, flexShrink: 0 }} />
-              {t.label}
-            </button>
-          ))}
+      {/* Mobile bottom sheet "More" menu */}
+      {menuOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }} onClick={() => setMenuOpen(false)}>
+          <div style={{ background: C.bgCard, borderTop: `2px solid ${C.gold}`, borderRadius: '16px 16px 0 0', padding: '20px 20px 40px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 20px' }} />
+            <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 12 }}>More sections</div>
+            {[
+              { id: 'networth', icon: '📈', label: 'Net Worth' },
+              { id: 'tithe',    icon: '🙏', label: 'Tithe & Giving' },
+              { id: 'roadmap',  icon: '🗺️', label: 'Roadmap' },
+              { id: 'scanner',  icon: '🔍', label: 'AI Scanner' },
+            ].map(t => (
+              <button key={t.id} onClick={() => switchTab(t.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+                padding: '14px 0', background: 'none', border: 'none',
+                borderBottom: `1px solid ${C.border}`,
+                color: tab === t.id ? C.gold : C.textSec,
+                fontFamily: MONO, fontWeight: tab === t.id ? 700 : 400,
+                fontSize: 15, cursor: 'pointer', textAlign: 'left',
+              }}>
+                <span style={{ fontSize: 20 }}>{t.icon}</span>
+                {t.label}
+                {tab === t.id && <span style={{ marginLeft: 'auto', color: C.gold }}>●</span>}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      <main style={{ ...S.body, padding: isMobile ? '16px 12px' : '24px 20px' }}>
+      {/* Mobile bottom nav bar */}
+      {isMobile && (
+        <nav style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
+          background: C.bgPrimary, borderTop: `1px solid ${C.gold}`,
+          display: 'flex', alignItems: 'stretch',
+        }}>
+          {[
+            { id: 'dashboard', icon: '🏠', label: 'Home' },
+            { id: 'portfolio', icon: '📊', label: 'Portfolio' },
+            { id: 'spending',  icon: '💸', label: 'Spending' },
+          ].map(t => (
+            <button key={t.id} onClick={() => switchTab(t.id)} style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              padding: '8px 4px', gap: 3, minHeight: 56,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: tab === t.id ? C.gold : C.textMuted,
+              borderTop: tab === t.id ? `2px solid ${C.gold}` : '2px solid transparent',
+            }}>
+              <span style={{ fontSize: 20 }}>{t.icon}</span>
+              <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: tab === t.id ? 700 : 400, letterSpacing: '0.5px' }}>{t.label}</span>
+            </button>
+          ))}
+          <button onClick={() => setMenuOpen(m => !m)} style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '8px 4px', gap: 3, minHeight: 56,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: ['networth','tithe','roadmap','scanner'].includes(tab) ? C.gold : C.textMuted,
+            borderTop: ['networth','tithe','roadmap','scanner'].includes(tab) ? `2px solid ${C.gold}` : '2px solid transparent',
+          }}>
+            <span style={{ fontSize: 20 }}>⋯</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.5px' }}>More</span>
+          </button>
+        </nav>
+      )}
+
+      <main style={{ ...S.body, padding: isMobile ? '16px 12px 84px' : '24px 20px' }}>
         {tab === 'dashboard' && (
           <DashboardTab
             positions={positions}
             expenses={expenses}
+            nwSnapshots={nwSnapshots}
+            givingEntries={givingEntries}
             onAddExpense={e => setExpenses(p => [e, ...p])}
             onTabSwitch={switchTab}
             targets={targets}
@@ -889,10 +931,18 @@ function GlobalMarketsCard({ onRefreshPrices, priceLoading, priceTs }) {
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, subColor, accent }) {
+function KpiCard({ label, value, sub, subColor, accent, onClick }) {
   return (
-    <div style={{ ...S.card, borderTop: `2px solid ${accent || '#c9a84c'}` }}>
-      <div style={S.cardTitle}>{label}</div>
+    <div
+      style={{ ...S.card, borderTop: `2px solid ${accent || '#c9a84c'}`, cursor: onClick ? 'pointer' : undefined, transition: 'background 0.15s' }}
+      onClick={onClick}
+      onMouseEnter={onClick ? e => { e.currentTarget.style.background = C.bgHover; } : undefined}
+      onMouseLeave={onClick ? e => { e.currentTarget.style.background = C.bgCard; } : undefined}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={S.cardTitle}>{label}</div>
+        {onClick && <span style={{ color: C.textMuted, fontSize: 14, marginTop: -2 }}>›</span>}
+      </div>
       <div style={S.bigNum}>{value}</div>
       {sub && <div style={{ ...S.bigNumSub, color: subColor || '#9a9880' }}>{sub}</div>}
     </div>
@@ -900,7 +950,7 @@ function KpiCard({ label, value, sub, subColor, accent }) {
 }
 
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
-function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets, transactions, onRefreshPrices, priceLoading, priceTs }) {
+function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddExpense, onTabSwitch, targets, transactions, onRefreshPrices, priceLoading, priceTs }) {
   const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
@@ -914,9 +964,15 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
   const openPositions = useMemo(() => positions.filter(p => (p.status || 'Open') !== 'Closed'), [positions]);
   const totalCost = useMemo(() => openPositions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [openPositions]);
   const unrealizedPnl = totalValue - totalCost;
-  const realizedPnl = useMemo(() => (transactions || []).reduce((s, t) => s + (t.realizedPnl || 0), 0), [transactions]);
-  const totalPnl = unrealizedPnl + realizedPnl;
-  const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+  const totalPnlPct = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0;
+
+  const checklistItems = [
+    { key: 'portfolio', label: 'Add your first position',        tab: 'portfolio', done: positions.length > 0 },
+    { key: 'spending',  label: "Log this month's expenses",      tab: 'spending',  done: expenses.length > 0 },
+    { key: 'networth',  label: 'Set up your net worth snapshot', tab: 'networth',  done: (nwSnapshots || []).length > 0 },
+    { key: 'tithe',     label: 'Record your tithe',              tab: 'tithe',     done: (givingEntries || []).length > 0 },
+  ];
+  const allDone = checklistItems.every(i => i.done);
 
   // Asset classes to show in snapshot (union of actual positions + targets)
   const snapshotBuckets = useMemo(() => {
@@ -931,17 +987,92 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
 
   return (
     <div>
-      <div style={{ fontFamily: SERIF, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Capital Management Dashboard</div>
-      <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '1px', marginBottom: 24 }}>Mir Asset Group, LLC — Private</div>
+      {/* Welcome area */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <GlobeIcon size={16} color={C.goldDim} />
+          <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: C.goldDim, letterSpacing: '2px', textTransform: 'uppercase' }}>Mir Asset Group</div>
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, marginBottom: 4 }}>
+          Welcome back.
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted }}>
+          Here's where things stand today.
+        </div>
+      </div>
 
       {/* ── KPI row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiCard label="Portfolio Value" value={fmt$(totalValue, 0)} sub={fmtPct(totalPnlPct) + ' total return'} subColor={totalPnl >= 0 ? '#5ab87a' : '#c45555'} accent="#d4a843" />
-        <KpiCard label="Unrealized P&L" value={fmt$(unrealizedPnl, 0)} sub={`${openPositions.length} open position${openPositions.length !== 1 ? 's' : ''}`} subColor={unrealizedPnl >= 0 ? '#5ab87a' : '#c45555'} accent={unrealizedPnl >= 0 ? '#5ab87a' : '#c45555'} />
-        <KpiCard label="Realized P&L" value={fmt$(realizedPnl, 0)} sub="closed trades" subColor={realizedPnl >= 0 ? '#5ab87a' : '#c45555'} accent={realizedPnl >= 0 ? '#5ab87a' : '#c45555'} />
-        <KpiCard label="Deployable (MTD)" value={fmt$(deployable, 0)} sub={`${fmt$(monthlySpend, 0)} spent this month`} subColor={deployable >= 0 ? '#5ab87a' : '#c45555'} accent="#d4a843" />
-        <KpiCard label="LTV Borrow Power" value={fmt$(totalValue * 0.4, 0)} sub="40% portfolio LTV" accent="#6366f1" />
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+        <KpiCard
+          label="Your Portfolio"
+          value={fmt$(totalValue, 0)}
+          sub={(unrealizedPnl >= 0 ? '▲ +' : '▼ ') + Math.abs(totalPnlPct).toFixed(1) + '% total return'}
+          subColor={unrealizedPnl >= 0 ? C.green : C.red}
+          accent="#d4a843"
+          onClick={() => onTabSwitch('portfolio')}
+        />
+        <KpiCard
+          label="Available to Invest"
+          value={fmt$(deployable, 0)}
+          sub="after tithe and expenses"
+          subColor={deployable >= 0 ? C.green : C.red}
+          accent={deployable >= 0 ? C.green : C.red}
+          onClick={() => onTabSwitch('spending')}
+        />
+        <KpiCard
+          label="Borrowing Power"
+          value={fmt$(totalValue * 0.4, 0)}
+          sub="40% of your portfolio"
+          accent="#6366f1"
+          onClick={() => onTabSwitch('roadmap')}
+        />
+        <KpiCard
+          label="Month's P&L"
+          value={(unrealizedPnl >= 0 ? '+' : '') + fmt$(unrealizedPnl, 0)}
+          sub="how your investments moved"
+          subColor={unrealizedPnl >= 0 ? C.green : C.red}
+          accent={unrealizedPnl >= 0 ? C.green : C.red}
+          onClick={() => onTabSwitch('portfolio')}
+        />
       </div>
+
+      {/* ── Getting Started checklist ── */}
+      {!allDone && (
+        <div style={{ ...S.card, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 20 }}>🗺️</span>
+            <div>
+              <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Getting Started</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted }}>Complete these to get the most out of your dashboard</div>
+            </div>
+          </div>
+          {checklistItems.map((item, idx) => (
+            <div
+              key={item.key}
+              onClick={() => !item.done && onTabSwitch(item.tab)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
+                borderBottom: idx < checklistItems.length - 1 ? `1px solid ${C.bgInput}` : 'none',
+                cursor: item.done ? 'default' : 'pointer',
+              }}
+            >
+              <div style={{
+                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                background: item.done ? C.green + '22' : 'transparent',
+                border: `2px solid ${item.done ? C.green : C.border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, color: C.green, fontWeight: 700,
+              }}>
+                {item.done ? '✓' : ''}
+              </div>
+              <span style={{ fontSize: 14, color: item.done ? C.textMuted : C.textPrimary, textDecoration: item.done ? 'line-through' : 'none', flex: 1 }}>
+                {item.label}
+              </span>
+              {!item.done && <span style={{ color: C.gold, fontSize: 16 }}>›</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Global Markets ── */}
       <GlobalMarketsCard onRefreshPrices={onRefreshPrices} priceLoading={priceLoading} priceTs={priceTs} />
@@ -950,7 +1081,7 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
       {alerts.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div role="button" onClick={() => onTabSwitch('portfolio')} style={{ ...S.sectionLabel, cursor: 'pointer', color: '#c9a84c', marginTop: 0 }}>
-            &#9888; Allocation Drift — click to manage
+            &#9888; Your allocation has drifted — tap to rebalance
           </div>
           {alerts.slice(0, 4).map(a => (
             <div key={a.bucket} style={S.alert}>
@@ -973,7 +1104,15 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
             <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11 }} onClick={() => onTabSwitch('portfolio')}>Manage</button>
           </div>
           {positions.length === 0 ? (
-            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>No positions — add them in Portfolio tab</div>
+            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>
+              No positions yet.{' '}
+              <span
+                style={{ color: C.gold, cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => onTabSwitch('portfolio')}
+              >
+                Add your first investment →
+              </span>
+            </div>
           ) : snapshotBuckets.map(name => {
             const color = getAssetClassColor(name);
             const actual = alloc[name] || 0;
@@ -1008,7 +1147,10 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
             <button style={{ ...S.btn, padding: '4px 10px', fontSize: 11, minHeight: 32 }} onClick={() => setShowQuickAdd(true)}>+ Add</button>
           </div>
           {recentExp.length === 0 ? (
-            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>No expenses logged yet</div>
+            <div style={{ color: '#6a6a58', fontSize: 13, padding: '12px 0' }}>
+              No expenses logged yet.{' '}
+              <span style={{ color: C.gold, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setShowQuickAdd(true)}>Log your first →</span>
+            </div>
           ) : (
             recentExp.map(e => (
               <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #1e2535' }}>
@@ -1026,17 +1168,19 @@ function DashboardTab({ positions, expenses, onAddExpense, onTabSwitch, targets,
             </button>
           )}
           <div style={{ marginTop: 12, padding: '10px 12px', background: '#132b21', borderRadius: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: deployable >= 0 ? C.green : C.red, marginBottom: 8 }}>
+              {deployable >= 0
+                ? `You've spent ${fmt$(monthlySpend, 0)} this month. You have ${fmt$(deployable, 0)} left to invest.`
+                : `You've spent ${fmt$(monthlySpend, 0)} this month — over budget by ${fmt$(Math.abs(deployable), 0)}.`}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 2 }}>
               <span>Monthly Net</span><span>{fmt$(MONTHLY_NET, 0)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 4 }}>
-              <span>Tithe ({(TITHE_RATE * 100).toFixed(0)}%)</span><span>-{fmt$(monthlyTithe, 0)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 2 }}>
+              <span>Tithe (10%)</span><span>−{fmt$(monthlyTithe, 0)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880', marginBottom: 6 }}>
-              <span>MTD Spend</span><span>-{fmt$(monthlySpend, 0)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: deployable >= 0 ? '#5ab87a' : '#c45555', borderTop: '1px solid #1e2535', paddingTop: 6 }}>
-              <span>Deployable</span><span>{fmt$(deployable, 0)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9a9880' }}>
+              <span>Spent this month</span><span>−{fmt$(monthlySpend, 0)}</span>
             </div>
           </div>
         </div>
@@ -1250,10 +1394,15 @@ function PortfolioTab({ positions, setPositions, targets, setTargets, transactio
 
       {/* ── Position table ── */}
       {portfolioView === 'positions' && positions.length === 0 ? (
-        <div style={{ ...S.card, textAlign: 'center', padding: '48px 20px' }}>
-          <div style={{ fontSize: 40, marginBottom: 14 }}>&#128200;</div>
-          <div style={{ fontSize: 15, color: '#9a9880', marginBottom: 18 }}>No positions yet. Add your first holding to start tracking.</div>
-          <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Add First Position</button>
+        <div style={{ ...S.card, textAlign: 'center', padding: '60px 24px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📈</div>
+          <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Start building your portfolio.</div>
+          <div style={{ fontFamily: MONO, fontSize: 13, color: C.textSec, marginBottom: 24, maxWidth: 340, margin: '0 auto 24px' }}>
+            Add your first investment — stocks, crypto, gold, whatever you hold.
+          </div>
+          <button style={{ ...S.btn, minHeight: 52, fontSize: 15, padding: '14px 28px' }} onClick={() => setShowAdd(true)}>
+            Add Your First Position
+          </button>
         </div>
       ) : portfolioView === 'positions' ? (
         <div style={S.card}>
@@ -1377,114 +1526,263 @@ function PortfolioTab({ positions, setPositions, targets, setTargets, transactio
   );
 }
 
-// ─── Add Position Modal ────────────────────────────────────────────────────────
+// ─── Add Position Modal (3-step wizard) ────────────────────────────────────────
+const SIMPLE_TYPES = [
+  { id: 'Equities',    label: 'Stocks & ETFs', icon: '📈', acId: 'Equities',        sectorHint: '' },
+  { id: 'Crypto',      label: 'Crypto',         icon: '🪙', acId: 'Crypto',          sectorHint: '' },
+  { id: 'Gold',        label: 'Gold',           icon: '🥇', acId: 'Precious Metals', sectorHint: 'Gold' },
+  { id: 'Silver',      label: 'Silver',         icon: '🥈', acId: 'Precious Metals', sectorHint: 'Silver' },
+  { id: 'Commodities', label: 'Commodities',    icon: '🛢️', acId: 'Commodities',    sectorHint: '' },
+  { id: 'Cash',        label: 'Cash',           icon: '💵', acId: 'Cash',            sectorHint: '' },
+];
+
+function getSimpleTypeId(pos) {
+  if (!pos) return 'Equities';
+  if (pos.assetClass === 'Precious Metals') return pos.sector === 'Silver' ? 'Silver' : 'Gold';
+  const st = SIMPLE_TYPES.find(t => t.acId === pos.assetClass);
+  return st ? st.id : 'Equities';
+}
+
 function AddPositionModal({ position, onSave, onClose }) {
   const isMobile = useIsMobile();
   const initPos  = position ? migratePosition(position) : null;
-  const initCash = initPos?.assetClass === 'Cash';
+  const [step, setStep] = useState(position ? 2 : 1);
+  const [simpleType, setSimpleType] = useState(() => getSimpleTypeId(initPos));
 
-  const [assetClass,   setAssetClass]   = useState(initPos?.assetClass || 'Equities');
+  const currentType = SIMPLE_TYPES.find(t => t.id === simpleType) || SIMPLE_TYPES[0];
+  const assetClass = currentType.acId;
+  const isCash = assetClass === 'Cash';
+  const acDef = ASSET_CLASSES.find(a => a.id === assetClass) || ASSET_CLASSES[0];
+
   const [ticker,       setTicker]       = useState(initPos?.ticker       || '');
   const [name,         setName]         = useState(initPos?.name         || '');
-  const [quantity,     setQuantity]     = useState(!initCash && initPos?.quantity     != null ? String(initPos.quantity)     : '');
-  const [avgCost,      setAvgCost]      = useState(!initCash && initPos?.avgCost      != null ? String(initPos.avgCost)      : '');
-  const [currentPrice, setCurrentPrice] = useState(!initCash && initPos?.currentPrice != null ? String(initPos.currentPrice) : '');
+  const [quantity,     setQuantity]     = useState(!isCash && initPos?.quantity     != null ? String(initPos.quantity)     : '');
+  const [avgCost,      setAvgCost]      = useState(!isCash && initPos?.avgCost      != null ? String(initPos.avgCost)      : '');
+  const [currentPrice, setCurrentPrice] = useState(!isCash && initPos?.currentPrice != null ? String(initPos.currentPrice) : '');
   const [tag,          setTag]          = useState(initPos?.sector || '');
-  const [cashAmt,      setCashAmt]      = useState(initCash && initPos?.quantity != null ? String(initPos.quantity) : '');
+  const [cashAmt,      setCashAmt]      = useState(isCash && initPos?.quantity != null ? String(initPos.quantity) : '');
   const tickerRef = useRef(null);
 
-  useEffect(() => { if (!position && tickerRef.current) tickerRef.current.focus(); }, [position]);
+  useEffect(() => {
+    if (step === 2 && !position && tickerRef.current) tickerRef.current.focus();
+  }, [step, position]);
 
-  const isCash = assetClass === 'Cash';
-  const acDef  = ASSET_CLASSES.find(a => a.id === assetClass) || ASSET_CLASSES[0];
-
-  const qty = isCash ? parseFloat(cashAmt)      : parseFloat(quantity);
-  const avg = isCash ? 1                        : parseFloat(avgCost);
-  const cur = isCash ? 1                        : parseFloat(currentPrice);
-  const tkr = ticker.trim().toUpperCase() || (isCash ? 'CASH' : '');
+  const qty = isCash ? parseFloat(cashAmt)  : parseFloat(quantity);
+  const avg = isCash ? 1                    : parseFloat(avgCost);
+  const cur = isCash ? 1                    : parseFloat(currentPrice);
+  const tkr = ticker.trim().toUpperCase()   || (isCash ? 'CASH' : '');
 
   const canSave = isCash
     ? !isNaN(qty) && qty > 0
     : tkr && !isNaN(qty) && qty > 0 && !isNaN(avg) && avg >= 0 && !isNaN(cur) && cur >= 0;
 
-  const liveVal = canSave ? qty * cur : null;
-  const livePnl = canSave && !isCash ? (cur - avg) * qty : null;
+  const liveVal    = canSave ? qty * cur : null;
+  const livePnl    = canSave && !isCash ? (cur - avg) * qty : null;
+  const livePnlPct = canSave && !isCash && avg > 0 ? ((cur - avg) / avg) * 100 : null;
+
+  const getUnitLabel = () => {
+    if (simpleType === 'Gold' || simpleType === 'Silver') return 'troy ounces';
+    return acDef.qtyUnit;
+  };
+
+  const getTickerPlaceholder = () => {
+    if (simpleType === 'Equities')    return 'e.g., QQQ, AAPL, VTI';
+    if (simpleType === 'Crypto')      return 'e.g., XRP, BTC, SOL';
+    if (simpleType === 'Gold')        return 'e.g., GOLD, PAXG';
+    if (simpleType === 'Silver')      return 'e.g., SLV, PSLV';
+    if (simpleType === 'Commodities') return 'e.g., USO, DBA';
+    return 'Ticker';
+  };
+
+  const getNamePlaceholder = () => {
+    if (simpleType === 'Equities') return 'e.g., Invesco QQQ Trust';
+    if (simpleType === 'Crypto')   return 'e.g., XRP Ledger';
+    if (simpleType === 'Gold')     return 'e.g., Physical Gold';
+    if (simpleType === 'Silver')   return 'e.g., Physical Silver';
+    return 'Full name (optional)';
+  };
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({ ...position, ticker: tkr, name: name.trim(), assetClass, sector: tag.trim(), quantity: qty, avgCost: avg, currentPrice: cur });
+    const sectorVal = currentType.sectorHint || tag.trim();
+    onSave({ ...position, ticker: tkr, name: name.trim(), assetClass, sector: sectorVal, quantity: qty, avgCost: avg, currentPrice: cur });
   };
 
-  const fld = (label, val, set, extra = {}) => (
+  const fld = (label, val, set, extra = {}, helper = '') => (
     <div style={{ marginBottom: 14 }}>
       <label style={{ display: 'block', fontFamily: MONO, fontSize: 10, color: C.textSec, marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
       <input value={val} onChange={e => set(e.target.value)} style={S.inputStyle} {...extra} />
+      {helper && <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 4 }}>{helper}</div>}
     </div>
   );
 
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 480, margin: isMobile ? '0 8px' : undefined }} onClick={e => e.stopPropagation()}>
-        <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 18 }}>
-          {position ? 'Edit Position' : 'Add Position'}
-        </div>
+  // STEP 1: Type selection
+  if (step === 1) {
+    return (
+      <div style={S.overlay} onClick={onClose}>
+        <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 500, margin: isMobile ? '0 8px' : undefined }} onClick={e => e.stopPropagation()}>
+          <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 6 }}>Step 1 of 3</div>
+          <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>What type of investment?</div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted, marginBottom: 20 }}>Pick the category that best fits what you hold.</div>
 
-        {/* ── Asset Class ── */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Asset Class</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-            {ASSET_CLASSES.map(ac => (
-              <button key={ac.id} onClick={() => setAssetClass(ac.id)} style={{
-                padding: '10px 4px', borderRadius: 6, minHeight: 56, border: `1px solid ${assetClass === ac.id ? ac.color : C.border}`,
-                background: assetClass === ac.id ? ac.color + '1a' : C.bgInput,
-                color: assetClass === ac.id ? ac.color : C.textSec, cursor: 'pointer', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 20, lineHeight: 1, marginBottom: 4 }}>{ac.icon}</div>
-                <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.3px', lineHeight: 1.2 }}>{ac.label}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
+            {SIMPLE_TYPES.map(st => (
+              <button
+                key={st.id}
+                onClick={() => setSimpleType(st.id)}
+                style={{
+                  padding: '14px 8px', borderRadius: 8, minHeight: 82, border: `2px solid ${simpleType === st.id ? C.gold : C.border}`,
+                  background: simpleType === st.id ? 'rgba(201,168,76,0.1)' : C.bgInput,
+                  color: simpleType === st.id ? C.gold : C.textSec,
+                  cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 6 }}>{st.icon}</div>
+                <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, lineHeight: 1.3 }}>{st.label}</div>
               </button>
             ))}
           </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={{ ...S.btnGhost, flex: 1, minHeight: 44 }} onClick={onClose}>Cancel</button>
+            <button style={{ ...S.btn, flex: 2, minHeight: 44 }} onClick={() => setStep(2)}>
+              Next: Tell us about it ›
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // STEP 2: Details form
+  if (step === 2) {
+    return (
+      <div style={S.overlay} onClick={onClose}>
+        <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 480, margin: isMobile ? '0 8px' : undefined }} onClick={e => e.stopPropagation()}>
+          <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            {!position && (
+              <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 20, padding: 0, lineHeight: 1, minWidth: 24 }}>‹</button>
+            )}
+            <div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                {position ? 'Edit Position' : `Step 2 of 3 — ${currentType.icon} ${currentType.label}`}
+              </div>
+              <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 700, color: C.textPrimary, marginTop: 2 }}>
+                {position ? 'Edit Position' : 'Tell us about it'}
+              </div>
+            </div>
+          </div>
+
+          {isCash ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {fld('Ticker (optional)', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'CASH' })}
+                {fld('Label (optional)', name, setName, { placeholder: 'e.g., Checking, HYSA' })}
+              </div>
+              {fld('Amount ($) *', cashAmt, setCashAmt, { type: 'number', min: '0', step: 'any', placeholder: '0.00', ref: tickerRef })}
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {fld('Ticker symbol *', ticker, v => setTicker(v.toUpperCase()), { placeholder: getTickerPlaceholder(), ref: tickerRef })}
+                {fld('Name (optional)', name, setName, { placeholder: getNamePlaceholder() })}
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontFamily: MONO, fontSize: 10, color: C.textSec, marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  How much do you own? ({getUnitLabel()}) *
+                </label>
+                <input type="number" min="0" step="any" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="e.g., 10" style={S.inputStyle} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: 'block', fontFamily: MONO, fontSize: 10, color: C.textSec, marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    What did you pay per {getUnitLabel().split(' ')[0]}? *
+                  </label>
+                  <input type="number" min="0" step="any" value={avgCost} onChange={e => setAvgCost(e.target.value)} placeholder="avg cost" style={S.inputStyle} />
+                  <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 4 }}>Your average price paid</div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: 'block', fontFamily: MONO, fontSize: 10, color: C.textSec, marginBottom: 5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    What's it worth now? *
+                  </label>
+                  <input type="number" min="0" step="any" value={currentPrice} onChange={e => setCurrentPrice(e.target.value)} placeholder="current price" style={S.inputStyle} />
+                  <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 4 }}>Per {getUnitLabel().split(' ')[0]} today</div>
+                </div>
+              </div>
+              {fld('Tag (optional)', tag, setTag, { placeholder: 'e.g., Tech, Dividend, DeFi — for your own reference' })}
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button style={{ ...S.btnGhost, flex: 1, minHeight: 44 }} onClick={position ? onClose : () => setStep(1)}>
+              {position ? 'Cancel' : '‹ Back'}
+            </button>
+            <button
+              style={{ ...S.btn, flex: 2, minHeight: 44, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }}
+              onClick={() => { if (canSave) { if (position) handleSave(); else setStep(3); } }}
+              disabled={!canSave}
+            >
+              {position ? 'Save Changes' : 'Next: Review ›'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // STEP 3: Review
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: isMobile ? 'none' : 460, margin: isMobile ? '0 8px' : undefined }} onClick={e => e.stopPropagation()}>
+        <button style={S.closeBtn} onClick={onClose}>&#215;</button>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 6 }}>Step 3 of 3</div>
+        <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 18 }}>Review &amp; confirm</div>
+
+        <div style={{ background: C.bgInput, borderRadius: 8, padding: '16px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <span style={{ fontSize: 28 }}>{currentType.icon}</span>
+            <div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted }}>{currentType.label}</div>
+              <div style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, color: C.textPrimary }}>{tkr}</div>
+              {name.trim() && <div style={{ fontSize: 13, color: C.textSec }}>{name.trim()}</div>}
+            </div>
+          </div>
+          {!isCash && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <div style={{ background: C.bgCard, borderRadius: 6, padding: '10px' }}>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>You own</div>
+                <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary }}>{qty} <span style={{ fontSize: 10, color: C.textSec }}>{getUnitLabel()}</span></div>
+              </div>
+              <div style={{ background: C.bgCard, borderRadius: 6, padding: '10px' }}>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Avg cost</div>
+                <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary }}>{fmt$(avg)}</div>
+              </div>
+              <div style={{ background: C.bgCard, borderRadius: 6, padding: '10px' }}>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Current price</div>
+                <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary }}>{fmt$(cur)}</div>
+              </div>
+              <div style={{ background: C.bgCard, borderRadius: 6, padding: '10px' }}>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Gain / Loss</div>
+                <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: livePnl != null && livePnl >= 0 ? C.green : C.red }}>
+                  {livePnl != null ? (livePnl >= 0 ? '+' : '') + fmt$(livePnl, 0) : '—'}
+                  {livePnlPct != null && <span style={{ fontSize: 10, marginLeft: 3 }}>({livePnlPct >= 0 ? '+' : ''}{livePnlPct.toFixed(1)}%)</span>}
+                </div>
+              </div>
+            </div>
+          )}
+          <div style={{ background: C.bgCard, borderRadius: 6, padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total value</div>
+            <div style={{ fontFamily: SERIF, fontSize: 26, fontWeight: 700, color: C.gold }}>{fmt$(liveVal, 0)}</div>
+          </div>
         </div>
 
-        {isCash ? (
-          /* ── Cash: name + single dollar amount ── */
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {fld('Ticker (opt)', ticker, v => setTicker(v.toUpperCase()), { placeholder: 'CASH' })}
-              {fld('Label (opt)', name, setName, { placeholder: 'Checking, HYSA…' })}
-            </div>
-            {fld('Amount ($) *', cashAmt, setCashAmt, { type: 'number', min: '0', step: 'any', placeholder: '0.00', ref: tickerRef })}
-          </>
-        ) : (
-          /* ── All other asset classes ── */
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {fld('Ticker *', ticker, v => setTicker(v.toUpperCase()), {
-                placeholder: assetClass === 'Crypto' ? 'XRP' : assetClass === 'Precious Metals' ? 'GOLD' : 'QQQ', ref: tickerRef,
-              })}
-              {fld('Name (opt)', name, setName, { placeholder: 'Position name' })}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-              {fld(`Qty (${acDef.qtyUnit}) *`, quantity, setQuantity, { type: 'number', min: '0', step: 'any', placeholder: '0' })}
-              {fld(`Avg Cost *`, avgCost, setAvgCost, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}
-              {fld(`Cur Price *`, currentPrice, setCurrentPrice, { type: 'number', min: '0', step: 'any', placeholder: '0.00' })}
-            </div>
-            {fld('Tag (opt)', tag, setTag, { placeholder: 'e.g. Tech, XRP, Growth…' })}
-          </>
-        )}
-
-        {canSave && (
-          <div style={{ background: C.bgInput, borderRadius: 6, padding: '9px 12px', marginBottom: 16, fontSize: 12, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <span style={{ color: C.textSec }}>Value: <strong style={{ color: C.gold }}>{fmt$(liveVal, 0)}</strong></span>
-            {livePnl != null && <span style={{ color: C.textSec }}>P&L: <strong style={{ color: livePnl >= 0 ? C.green : C.red }}>{livePnl >= 0 ? '+' : ''}{fmt$(livePnl, 0)}</strong></span>}
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{ ...S.btnGhost, flex: 1, minHeight: 44 }} onClick={onClose}>Cancel</button>
-          <button style={{ ...S.btn, flex: 2, minHeight: 44, opacity: canSave ? 1 : 0.45, cursor: canSave ? 'pointer' : 'not-allowed' }} onClick={handleSave} disabled={!canSave}>
-            {position ? 'Save Changes' : 'Add Position'}
+          <button style={{ ...S.btnGhost, flex: 1, minHeight: 44 }} onClick={() => setStep(2)}>‹ Back</button>
+          <button style={{ ...S.btn, flex: 2, minHeight: 44, fontSize: 15 }} onClick={handleSave}>
+            Add Position ✓
           </button>
         </div>
       </div>
@@ -1692,15 +1990,64 @@ function SpendingTab({ expenses, setExpenses }) {
 
   const handleDelete = (id) => setExpenses(p => p.filter(e => e.id !== id));
 
+  const QUICK_CATS = ['Housing', 'Food', 'Vehicle/Fuel', 'Tithe', 'Misc'];
+  const [quickCat, setQuickCat] = useState(null);
+  const openQuick = (cat) => { setQuickCat(cat); setShowAdd(true); };
+  const openFull  = ()    => { setQuickCat(null); setShowAdd(true); };
+
+  const budgetBase = MONTHLY_NET - (Math.round(MONTHLY_GROSS * TITHE_RATE));
+  const spendPct   = budgetBase > 0 ? Math.min(totalSpend / budgetBase, 1) : 0;
+  const barColor   = spendPct < 0.7 ? C.green : spendPct < 0.9 ? '#c9a84c' : C.red;
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 20, gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 16, gap: 10 }}>
         <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Spending Tracker</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
           <select value={viewMonth} onChange={e => setViewMonth(e.target.value)} style={{ ...S.selectStyle, width: isMobile ? '1fr' : 'auto', flex: isMobile ? 1 : undefined, minWidth: 170 }}>
             {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
           </select>
-          <button style={S.btn} onClick={() => setShowAdd(true)}>+ Add</button>
+          <button style={{ ...S.btn, minHeight: 44 }} onClick={openFull}>+ Log Expense</button>
+        </div>
+      </div>
+
+      {/* ── Quick-add presets ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>Quick add</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {QUICK_CATS.map(cat => (
+            <button key={cat} onClick={() => openQuick(cat)} style={{
+              fontFamily: MONO, fontSize: 12, padding: '8px 14px', minHeight: 44, borderRadius: 6,
+              border: `1px solid ${C.border}`, background: C.bgCard, color: C.textSec, cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}>
+              {cat}
+            </button>
+          ))}
+          <button onClick={openFull} style={{
+            fontFamily: MONO, fontSize: 12, padding: '8px 14px', minHeight: 44, borderRadius: 6,
+            border: `1px dashed ${C.border}`, background: 'transparent', color: C.textMuted, cursor: 'pointer',
+          }}>
+            Other category…
+          </button>
+        </div>
+      </div>
+
+      {/* ── Spending summary ── */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: spendPct < 0.9 ? C.textPrimary : C.red, marginBottom: 10 }}>
+          {totalSpend === 0
+            ? `No expenses logged for ${new Date(viewMonth + '-01').toLocaleDateString('en-US', { month: 'long' })} yet.`
+            : deployable >= 0
+              ? `You've spent ${fmt$(totalSpend, 0)} this month. You have ${fmt$(deployable, 0)} left to invest.`
+              : `You've spent ${fmt$(totalSpend, 0)} this month — ${fmt$(Math.abs(deployable), 0)} over budget.`}
+        </div>
+        <div style={{ height: 10, background: C.bgInput, borderRadius: 5, overflow: 'hidden', marginBottom: 6 }}>
+          <div style={{ height: '100%', width: `${spendPct * 100}%`, background: barColor, borderRadius: 5, transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10, color: C.textMuted }}>
+          <span>$0</span>
+          <span>Budget: {fmt$(budgetBase, 0)}</span>
         </div>
       </div>
 
@@ -1781,8 +2128,9 @@ function SpendingTab({ expenses, setExpenses }) {
 
       {showAdd && (
         <AddExpenseModal
-          onSave={e => { setExpenses(p => [e, ...p]); setShowAdd(false); }}
-          onClose={() => setShowAdd(false)}
+          initCategory={quickCat}
+          onSave={e => { setExpenses(p => [e, ...p]); setShowAdd(false); setQuickCat(null); }}
+          onClose={() => { setShowAdd(false); setQuickCat(null); }}
         />
       )}
     </div>
@@ -1790,9 +2138,9 @@ function SpendingTab({ expenses, setExpenses }) {
 }
 
 // ─── Add Expense Modal ─────────────────────────────────────────────────────────
-function AddExpenseModal({ onSave, onClose }) {
+function AddExpenseModal({ onSave, onClose, initCategory }) {
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Food');
+  const [category, setCategory] = useState(initCategory || 'Food');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(TODAY_STR);
   const amtRef = useRef(null);
@@ -1913,7 +2261,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8' }}>Net Worth Over Time</div>
           {chartData.length > 0 && <div style={{ fontSize: 12, color: '#9a9880', marginTop: 2 }}>{chartData.length} monthly snapshot{chartData.length !== 1 ? 's' : ''}</div>}
@@ -1922,6 +2270,19 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
           <button style={S.btnGhost} onClick={() => setShowMilestone(true)}>+ Milestone</button>
           <button style={S.btn} onClick={() => setShowSnapshot(true)}>+ Snapshot</button>
         </div>
+      </div>
+
+      {/* Explanation card */}
+      <div style={{ ...S.card, marginBottom: 20, borderTop: `2px solid ${C.gold}` }}>
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textSec, lineHeight: 1.8 }}>
+          📊 <strong style={{ color: C.textPrimary }}>What is net worth?</strong> It's everything you own minus everything you owe.
+          Add a snapshot each month — it takes 60 seconds — and you'll see your wealth grow over time.
+        </div>
+        {snapshots.length === 0 && (
+          <button style={{ ...S.btn, marginTop: 12, minHeight: 44, fontSize: 14 }} onClick={() => setShowSnapshot(true)}>
+            Add This Month's Snapshot →
+          </button>
+        )}
       </div>
 
       {/* KPI row */}
@@ -2112,23 +2473,33 @@ function AddSnapshotModal({ snapshot, onSave, onClose }) {
         </div>
 
         <div style={S.grid2}>
-          {NW_CATEGORIES.map(cat => (
-            <div key={cat} style={{ marginBottom: 10 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
-                <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: NW_COLORS[cat], marginRight: 5, verticalAlign: 'middle' }} />
-                <span style={{ color: '#9a9880' }}>{NW_LABELS[cat]}</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={values[cat]}
-                onChange={e => setValues(p => ({ ...p, [cat]: e.target.value }))}
-                placeholder="0"
-                style={S.inputStyle}
-              />
-            </div>
-          ))}
+          {NW_CATEGORIES.map(cat => {
+            const friendlyLabels = {
+              liquidInvestments: 'Investments (stocks, ETFs)',
+              crypto:            'Crypto holdings',
+              metals:            'Gold & Silver (physical + paper)',
+              cash:              'Cash in bank',
+              businessEquity:    'Business equity (estimated value)',
+              realEstate:        'Real estate (if any)',
+            };
+            return (
+              <div key={cat} style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
+                  <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: NW_COLORS[cat], marginRight: 5, verticalAlign: 'middle' }} />
+                  <span style={{ color: '#9a9880' }}>{friendlyLabels[cat] || NW_LABELS[cat]}</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={values[cat]}
+                  onChange={e => setValues(p => ({ ...p, [cat]: e.target.value }))}
+                  placeholder="0"
+                  style={S.inputStyle}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ background: '#132b21', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2197,6 +2568,26 @@ function AddMilestoneModal({ milestone, onSave, onClose }) {
   );
 }
 
+// ─── Progress Ring ─────────────────────────────────────────────────────────────
+function ProgressRing({ pct, size = 80, stroke = 8, color = '#c9a84c', children }) {
+  const r    = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.min(pct, 1));
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#2a4a3a" strokeWidth={stroke} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tithe & Giving Tab ────────────────────────────────────────────────────────
 function TitheTab({ givingEntries, setGivingEntries }) {
   const [showAdd,   setShowAdd]   = useState(false);
@@ -2236,15 +2627,40 @@ function TitheTab({ givingEntries, setGivingEntries }) {
     return [String(yr), String(yr - 1), String(yr - 2)];
   }, []);
 
+  const thisMonthStr = new Date().toISOString().slice(0, 7);
+  const thisMonthGiven = givingEntries
+    .filter(e => e.date.startsWith(thisMonthStr))
+    .reduce((s, e) => s + e.amount, 0);
+  const monthThisPct = monthlyTarget > 0 ? thisMonthGiven / monthlyTarget : 0;
+
   return (
     <div>
+      {/* Plain language intro with progress ring */}
+      <div style={{ ...S.card, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <ProgressRing pct={monthThisPct} size={80} color={C.gold}>
+          <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.gold }}>{Math.round(monthThisPct * 100)}%</span>
+        </ProgressRing>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
+            Your tithe goal is 10% of gross income — {fmt$(monthlyTarget, 0)}/month.
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: C.textSec, marginBottom: 2 }}>
+            This month: <strong style={{ color: monthThisPct >= 1 ? C.green : C.gold }}>{fmt$(thisMonthGiven, 0)}</strong> given
+            {monthThisPct >= 1
+              ? ' ✓ Goal met!'
+              : ` — ${fmt$(Math.max(monthlyTarget - thisMonthGiven, 0), 0)} to go`}
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted }}>Track what you give. Every gift counts.</div>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8' }}>Tithe &amp; Giving</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={viewYear} onChange={e => setViewYear(e.target.value)} style={{ ...S.selectStyle, width: 'auto', minWidth: 80 }}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <button style={S.btn} onClick={() => setShowAdd(true)}>+ Log Giving</button>
+          <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Log a Gift</button>
         </div>
       </div>
 
@@ -2349,7 +2765,7 @@ function AddGivingModal({ onSave, onClose }) {
     <div style={S.overlay} onClick={onClose}>
       <div style={{ ...S.modal, maxWidth: 360 }} onClick={e => e.stopPropagation()}>
         <button style={S.closeBtn} onClick={onClose}>&#215;</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>Log Giving</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e4d8', marginBottom: 18 }}>Log a Gift</div>
 
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: 'block', fontSize: 11, color: '#9a9880', marginBottom: 4, fontWeight: 600 }}>Amount ($) *</label>
@@ -2564,14 +2980,14 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
 
 // ─── AI Market Scanner ─────────────────────────────────────────────────────────
 const SCAN_TYPES = [
-  { id: 'regime',      label: 'Market Regime'    },
-  { id: 'crypto',      label: 'Crypto Movers'    },
-  { id: 'commodities', label: 'Commodities'       },
-  { id: 'dividends',   label: 'Dividend Picks'   },
-  { id: 'quantum',     label: 'Quantum/Emerging' },
-  { id: 'sectors',        label: 'Sector Sweep'      },
-  { id: 'global_session', label: '🌅 Morning Briefing' },
-  { id: 'custom',         label: 'Custom Query'      },
+  { id: 'regime',         label: "What's the market doing?" },
+  { id: 'crypto',         label: 'Crypto update'             },
+  { id: 'commodities',    label: 'Gold, silver & commodities' },
+  { id: 'dividends',      label: 'Dividend ideas'            },
+  { id: 'quantum',        label: 'Emerging tech'             },
+  { id: 'sectors',        label: 'Full market scan'          },
+  { id: 'global_session', label: '🌅 Overnight briefing'     },
+  { id: 'custom',         label: 'Ask anything'              },
 ];
 
 const DIR_META = {
@@ -2597,6 +3013,7 @@ function fmtTs(iso) {
 }
 
 function SignalCard({ signal, inWatchlist, onToggleWatch }) {
+  const [expanded, setExpanded] = useState(false);
   const dir = DIR_META[signal.direction] || DIR_META.neutral;
   const confColor = CONF_COLORS[signal.confidence] || '#c9a84c';
   return (
@@ -2655,6 +3072,28 @@ function SignalCard({ signal, inWatchlist, onToggleWatch }) {
       <div style={{ fontFamily: MONO, fontSize: 12, color: '#9a9880', lineHeight: 1.6 }}>
         {signal.reasoning}
       </div>
+      {/* Expandable explanation */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          background: 'none', border: `1px solid #1e2535`, borderRadius: 4,
+          color: '#6a6a58', fontFamily: MONO, fontSize: 10, cursor: 'pointer',
+          padding: '4px 8px', textAlign: 'left', width: '100%',
+        }}
+      >
+        {expanded ? '▲ Hide explanation' : '▼ What does this mean?'}
+      </button>
+      {expanded && (
+        <div style={{ padding: '10px 12px', background: '#0a1a14', borderRadius: 6, fontFamily: MONO, fontSize: 12, color: '#9a9880', lineHeight: 1.7 }}>
+          <strong style={{ color: '#e8e4d8' }}>In plain English: </strong>
+          {signal.direction === 'bullish'
+            ? `${signal.ticker} looks promising — the AI sees positive momentum and buying signals.`
+            : signal.direction === 'bearish'
+            ? `${signal.ticker} shows weakness — the AI sees selling pressure or negative indicators.`
+            : `${signal.ticker} is showing mixed signals with no clear direction right now.`}
+          {' '}Confidence: <strong style={{ color: confColor }}>{signal.confidence || 'Medium'}</strong>.
+        </div>
+      )}
     </div>
   );
 }
@@ -2850,6 +3289,13 @@ function ScannerTab() {
                 <div style={{ fontFamily: MONO, fontSize: 13, color: '#e8e4d8', lineHeight: 1.7 }}>
                   {result.summary}
                 </div>
+              </div>
+
+              {/* Plain English intro */}
+              <div style={{ fontFamily: MONO, fontSize: 13, color: '#9a9880', marginBottom: 14, lineHeight: 1.6 }}>
+                The AI scanned the markets and found{' '}
+                <strong style={{ color: '#e8e4d8' }}>{result.signals.length} signal{result.signals.length !== 1 ? 's' : ''}</strong>.
+                {' '}Here's what it found:
               </div>
 
               {/* Signal cards grid */}

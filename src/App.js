@@ -59,6 +59,84 @@ const NW_LABELS = {
   realEstate:        'Real Estate',
 };
 
+// ─── Market Sections ───────────────────────────────────────────────────────────
+const MARKET_SECTIONS = [
+  { id: 'indexes',    label: 'Indexes',             tickers: [
+    { symbol: 'SPY',      name: 'S&P 500'           },
+    { symbol: 'QQQ',      name: 'Nasdaq 100'        },
+    { symbol: 'DIA',      name: 'Dow Jones'         },
+    { symbol: 'IWM',      name: 'Russell 2000'      },
+  ]},
+  { id: 'crypto',     label: 'Crypto',              tickers: [
+    { symbol: 'BTC',      name: 'Bitcoin'           },
+    { symbol: 'XRP',      name: 'Ripple'            },
+    { symbol: 'ETH',      name: 'Ethereum'          },
+    { symbol: 'SOL',      name: 'Solana'            },
+    { symbol: 'XLM',      name: 'Stellar'           },
+    { symbol: 'HBAR',     name: 'Hedera'            },
+  ]},
+  { id: 'commodities', label: 'Commodities',        tickers: [
+    { symbol: 'GOLD',     name: 'Gold ($/oz t)'     },
+    { symbol: 'SILVER',   name: 'Silver ($/oz t)'   },
+    { symbol: 'CL=F',     name: 'Crude Oil WTI'     },
+    { symbol: 'NG=F',     name: 'Natural Gas'       },
+    { symbol: 'URA',      name: 'Uranium ETF'       },
+    { symbol: 'CCJ',      name: 'Cameco (Uranium)'  },
+  ]},
+  { id: 'tech',       label: 'Tech',                tickers: [
+    { symbol: 'AAPL',     name: 'Apple'             },
+    { symbol: 'MSFT',     name: 'Microsoft'         },
+    { symbol: 'NVDA',     name: 'Nvidia'            },
+    { symbol: 'GOOGL',    name: 'Google'            },
+    { symbol: 'AMZN',     name: 'Amazon'            },
+    { symbol: 'TSLA',     name: 'Tesla'             },
+  ]},
+  { id: 'quantum',    label: 'Quantum / Emerging',  tickers: [
+    { symbol: 'IONQ',     name: 'IonQ'              },
+    { symbol: 'QBTS',     name: 'D-Wave'            },
+    { symbol: 'RGTI',     name: 'Rigetti'           },
+    { symbol: 'QTUM',     name: 'QTUM ETF'          },
+  ]},
+  { id: 'energy',     label: 'Energy',              tickers: [
+    { symbol: 'XOM',      name: 'ExxonMobil'        },
+    { symbol: 'CVX',      name: 'Chevron'           },
+    { symbol: 'NEE',      name: 'NextEra Energy'    },
+  ]},
+  { id: 'defense',    label: 'Defense',             tickers: [
+    { symbol: 'LMT',      name: 'Lockheed Martin'   },
+    { symbol: 'RTX',      name: 'Raytheon'          },
+    { symbol: 'NOC',      name: 'Northrop Grumman'  },
+    { symbol: 'PLTR',     name: 'Palantir'          },
+  ]},
+  { id: 'healthcare', label: 'Healthcare',          tickers: [
+    { symbol: 'UNH',      name: 'UnitedHealth'      },
+    { symbol: 'PFE',      name: 'Pfizer'            },
+    { symbol: 'LLY',      name: 'Eli Lilly'         },
+    { symbol: 'ISRG',     name: 'Intuitive Surgical'},
+  ]},
+  { id: 'financials', label: 'Financials',          tickers: [
+    { symbol: 'JPM',      name: 'JPMorgan'          },
+    { symbol: 'BRK-B',    name: 'Berkshire Hathaway'},
+    { symbol: 'GS',       name: 'Goldman Sachs'     },
+  ]},
+  { id: 'forex',      label: 'Forex',               tickers: [
+    { symbol: 'DX-Y.NYB', name: 'Dollar Index (DXY)'},
+    { symbol: 'EURUSD=X', name: 'EUR / USD'         },
+    { symbol: 'USDJPY=X', name: 'USD / JPY'         },
+    { symbol: 'GBPJPY=X', name: 'GBP / JPY'         },
+  ]},
+];
+
+// Tickers shown in the slim dashboard snapshot strip
+const SNAPSHOT_TICKERS = [
+  { symbol: 'SPY',   name: 'S&P 500' },
+  { symbol: 'QQQ',   name: 'Nasdaq'  },
+  { symbol: 'BTC',   name: 'Bitcoin' },
+  { symbol: 'XRP',   name: 'XRP'     },
+  { symbol: 'GOLD',  name: 'Gold'    },
+  { symbol: 'CL=F',  name: 'Oil'     },
+];
+
 // ─── PIN Auth ──────────────────────────────────────────────────────────────────
 // SHA-256("7777") — to change PIN, update this constant:
 // node -e "require('crypto').createHash('sha256').update('YOUR_PIN').digest('hex')"
@@ -434,6 +512,26 @@ function calcFIFO(lots, qtyToSell) {
   return costBasis;
 }
 
+// ─── Market Price Helpers ──────────────────────────────────────────────────────
+const fmtMktPrice = (p) => {
+  if (p == null || isNaN(p)) return '—';
+  if (p >= 1000)  return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 1)     return '$' + p.toFixed(2);
+  if (p >= 0.01)  return '$' + p.toFixed(4);
+  return '$' + p.toFixed(6);
+};
+
+const fmtMktChange = (change, changePct) => {
+  if (change == null || isNaN(change)) return { text: '—', icon: '◆', color: '#c9a84c' };
+  const up    = change > 0.0005;
+  const down  = change < -0.0005;
+  const color = up ? '#5ab87a' : down ? '#c45555' : '#c9a84c';
+  const icon  = up ? '▲' : down ? '▼' : '◆';
+  const sign  = up ? '+' : '';
+  const pStr  = changePct != null ? ` (${sign}${changePct.toFixed(2)}%)` : '';
+  return { text: `${sign}${change >= 0 ? '' : ''}${Math.abs(change) < 0.01 ? change.toFixed(4) : change.toFixed(2)}${pStr}`, icon, color };
+};
+
 // ─── Globe Icon ────────────────────────────────────────────────────────────────
 function GlobeIcon({ size = 24, color = '#c9a84c' }) {
   const uid = useId().replace(/[^a-z0-9]/gi, '');
@@ -635,6 +733,7 @@ export default function App() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard'  },
+    { id: 'markets',   label: 'Markets'    },
     { id: 'portfolio', label: 'Portfolio'  },
     { id: 'spending',  label: 'Spending'   },
     { id: 'networth',  label: 'Net Worth'  },
@@ -717,6 +816,7 @@ export default function App() {
         }}>
           {[
             { id: 'dashboard', icon: '🏠', label: 'Home' },
+            { id: 'markets',   icon: '📈', label: 'Markets' },
             { id: 'portfolio', icon: '📊', label: 'Portfolio' },
             { id: 'spending',  icon: '💸', label: 'Spending' },
           ].map(t => (
@@ -760,6 +860,7 @@ export default function App() {
             priceTs={priceTs}
           />
         )}
+        {tab === 'markets'   && <MarketsTab />}
         {tab === 'portfolio' && (
           <PortfolioTab
             positions={positions}
@@ -1076,6 +1177,9 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
 
       {/* ── Global Markets ── */}
       <GlobalMarketsCard onRefreshPrices={onRefreshPrices} priceLoading={priceLoading} priceTs={priceTs} />
+
+      {/* ── Market Snapshot strip (cached; tap to go to Markets) ── */}
+      <MarketSnapshotStrip onTabSwitch={onTabSwitch} />
 
       {/* ── Drift alerts ── */}
       {alerts.length > 0 && (
@@ -3448,6 +3552,179 @@ function ScannerTab() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Markets Tab ───────────────────────────────────────────────────────────────
+function TickerRow({ ticker, priceData }) {
+  const chg = priceData ? fmtMktChange(priceData.change, priceData.changePct) : null;
+
+  return (
+    <div
+      style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '9px 8px', borderBottom: `1px solid ${C.border}`,
+        transition: 'background 0.1s', cursor: 'default',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = C.bgHover; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div>
+        <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: priceData ? C.textPrimary : C.textMuted }}>
+          {ticker.symbol}
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 1 }}>{ticker.name}</div>
+      </div>
+      {priceData ? (
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary }}>
+            {fmtMktPrice(priceData.price)}
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: chg.color }}>
+            {chg.icon} {chg.text}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted }}>—</div>
+      )}
+    </div>
+  );
+}
+
+function MarketSectionCard({ section, prices, isMobile }) {
+  return (
+    <div style={{ ...S.card, marginBottom: 14 }}>
+      <div style={{
+        fontFamily: SERIF, fontSize: 11, fontWeight: 700,
+        color: C.gold, letterSpacing: '2px', textTransform: 'uppercase',
+        marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
+      }}>
+        {section.label}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)' }}>
+        {section.tickers.map(t => (
+          <TickerRow key={t.symbol} ticker={t} priceData={prices ? (prices[t.symbol] || null) : null} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MarketSnapshotStrip({ onTabSwitch }) {
+  const [prices] = useState(() => {
+    try {
+      const raw = localStorage.getItem('mag_market_prices');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+
+  if (!prices) return null;
+
+  return (
+    <div
+      style={{ ...S.card, marginBottom: 20, padding: '10px 14px', cursor: 'pointer', borderTop: `2px solid ${C.gold}` }}
+      onClick={() => onTabSwitch('markets')}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>
+          Market Snapshot
+        </div>
+        <span style={{ fontFamily: MONO, fontSize: 10, color: C.gold }}>Full Markets ›</span>
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {SNAPSHOT_TICKERS.map(t => {
+          const p = prices[t.symbol];
+          if (!p) return null;
+          const chg = fmtMktChange(p.change, p.changePct);
+          return (
+            <div key={t.symbol} style={{ minWidth: 56 }}>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, marginBottom: 1 }}>{t.name}</div>
+              <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: C.textPrimary }}>{fmtMktPrice(p.price)}</div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: chg.color }}>{chg.icon} {chg.text}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MarketsTab() {
+  const isMobile = useIsMobile();
+  const [prices,  setPrices]  = useState(() => {
+    try {
+      const raw = localStorage.getItem('mag_market_prices');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+  const [lastTs,  setLastTs]  = useState(() => {
+    try {
+      const ts = localStorage.getItem('mag_market_prices_ts');
+      return ts ? parseInt(ts, 10) : null;
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
+  const [failed,  setFailed]  = useState([]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/prices/market-overview');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const p    = data.prices || {};
+      const ts   = Date.now();
+      setPrices(p);
+      setFailed(data.failed || []);
+      setLastTs(ts);
+      try {
+        localStorage.setItem('mag_market_prices', JSON.stringify(p));
+        localStorage.setItem('mag_market_prices_ts', String(ts));
+      } catch {}
+    } catch {}
+    finally { setLoading(false); }
+  }, []);
+
+  const minAgo = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontFamily: SERIF, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
+            Markets
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted }}>
+            {minAgo != null
+              ? `Last updated: ${minAgo === 0 ? 'just now' : minAgo + 'm ago'}`
+              : 'No data cached — tap Refresh to load'}
+          </div>
+        </div>
+        <button
+          style={{ ...S.btn, padding: '9px 22px', fontSize: 13, flexShrink: 0 }}
+          onClick={refresh}
+          disabled={loading}
+        >
+          {loading ? '⟳ Loading…' : '↻ Refresh Prices'}
+        </button>
+      </div>
+
+      {prices === null && !loading && (
+        <div style={{ ...S.card, textAlign: 'center', padding: '40px 20px', color: C.textMuted, fontFamily: MONO, fontSize: 13 }}>
+          Tap <strong style={{ color: C.gold }}>Refresh Prices</strong> to load market data for the first time.
+        </div>
+      )}
+
+      {prices !== null && MARKET_SECTIONS.map(section => (
+        <MarketSectionCard
+          key={section.id}
+          section={section}
+          prices={prices}
+          failed={failed}
+          isMobile={isMobile}
+        />
+      ))}
     </div>
   );
 }

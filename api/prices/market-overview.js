@@ -75,6 +75,18 @@ const AV_TASKS = [
   { type: 'eq',  sym: 'JPM'   },
   { type: 'eq',  sym: 'BRK-B' },
   { type: 'eq',  sym: 'GS'    },
+  // ── Landing portfolio holdings (broad-market ETFs + extras) ───────────────
+  { type: 'eq',  sym: 'VTI'   },
+  { type: 'eq',  sym: 'AMD'   },
+  { type: 'eq',  sym: 'SMCI'  },
+  { type: 'eq',  sym: 'SCHD'  },
+  { type: 'eq',  sym: 'JEPI'  },
+  { type: 'eq',  sym: 'O'     },
+  { type: 'eq',  sym: 'MO'    },
+  { type: 'eq',  sym: 'GLD'   },
+  { type: 'eq',  sym: 'SLV'   },
+  { type: 'eq',  sym: 'XLE'   },
+  { type: 'eq',  sym: 'USO'   },
 ];
 
 // ── Per-ticker in-process cache ──────────────────────────────────────────────

@@ -127,6 +127,53 @@ const MARKET_SECTIONS = [
   ]},
 ];
 
+// ─── Landing Portfolio Allocation ──────────────────────────────────────────────
+// Target weights at session baseline. On first live-price fetch we back-calculate
+// share counts against PORTFOLIO_BASELINE_USD and freeze them — total then moves
+// naturally with live prices. Edit here to retune the model portfolio.
+const PORTFOLIO_BASELINE_USD = 4_732_481;
+const PORTFOLIO_ALLOCATION = [
+  { id: 'equities',  label: 'Equities',             color: '#5b8af0', holdings: [
+    { ticker: 'QQQ',   pct: 8 },
+    { ticker: 'VTI',   pct: 6 },
+    { ticker: 'SPY',   pct: 4 },
+    { ticker: 'NVDA',  pct: 4 },
+    { ticker: 'MSFT',  pct: 3 },
+    { ticker: 'AAPL',  pct: 3 },
+    { ticker: 'GOOGL', pct: 2 },
+    { ticker: 'TSLA',  pct: 2 },
+    { ticker: 'AMD',   pct: 2 },
+    { ticker: 'PLTR',  pct: 2 },
+    { ticker: 'SMCI',  pct: 2 },
+    { ticker: 'JPM',   pct: 2 },
+  ]},
+  { id: 'crypto',    label: 'Crypto',               color: '#f0a030', holdings: [
+    { ticker: 'XRP',   pct: 12 },
+    { ticker: 'BTC',   pct: 8  },
+    { ticker: 'ETH',   pct: 5  },
+  ]},
+  { id: 'dividends', label: 'Dividends',            color: '#5ab87a', holdings: [
+    { ticker: 'SCHD',  pct: 6 },
+    { ticker: 'JEPI',  pct: 4 },
+    { ticker: 'O',     pct: 3 },
+    { ticker: 'MO',    pct: 2 },
+  ]},
+  { id: 'quantum',   label: 'Quantum / Emerging',   color: '#a78bfa', holdings: [
+    { ticker: 'IONQ',  pct: 2.5 },
+    { ticker: 'RGTI',  pct: 2.5 },
+  ]},
+  { id: 'metals',    label: 'Precious Metals',      color: '#c9a84c', holdings: [
+    { ticker: 'GLD',   pct: 5 },
+    { ticker: 'SLV',   pct: 3 },
+  ]},
+  { id: 'energy',    label: 'Energy / Commodities', color: '#e07040', holdings: [
+    { ticker: 'XLE',   pct: 3 },
+    { ticker: 'USO',   pct: 2 },
+    { ticker: 'URA',   pct: 2 },
+  ]},
+];
+const LANDING_SHARES_KEY = 'mag_landing_shares';
+
 // Tickers shown in the slim dashboard snapshot strip
 const SNAPSHOT_TICKERS = [
   { symbol: 'SPY',   name: 'S&P 500' },
@@ -910,6 +957,196 @@ export default function App() {
   );
 }
 
+// ─── Landing Portfolio Card ────────────────────────────────────────────────────
+// Live-priced model portfolio shown as the headline of the post-PIN landing view.
+// Shares are frozen at first live-price fetch (per session) so total moves naturally
+// with the market. Reads/writes shared market-overview cache (mag_market_prices) so
+// it doesn't add a second polling loop.
+function LandingPortfolioCard() {
+  const isMobile = useIsMobile();
+
+  const [prices, setPrices] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mag_market_prices') || '{}'); }
+    catch { return {}; }
+  });
+  const [loading, setLoading] = useState(false);
+  const [lastTs,  setLastTs]  = useState(() => {
+    try { const ts = localStorage.getItem('mag_market_prices_ts'); return ts ? parseInt(ts, 10) : null; }
+    catch { return null; }
+  });
+
+  // Frozen share counts + per-ticker baseline price (the price at the moment we
+  // first saw it this session). Persisted to sessionStorage so navigating between
+  // dashboard tabs doesn't re-freeze at moved prices.
+  const frozenRef = useRef(null);
+  if (frozenRef.current == null) {
+    try { frozenRef.current = JSON.parse(sessionStorage.getItem(LANDING_SHARES_KEY) || '{}'); }
+    catch { frozenRef.current = {}; }
+  }
+
+  const fetchPrices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/prices/market-overview');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const incoming = data.prices || {};
+      if (Object.keys(incoming).length === 0) return;
+      setPrices(prev => {
+        const merged = { ...prev, ...incoming };
+        try {
+          localStorage.setItem('mag_market_prices', JSON.stringify(merged));
+          localStorage.setItem('mag_market_prices_ts', String(Date.now()));
+        } catch {}
+        return merged;
+      });
+      setLastTs(Date.now());
+    } catch {} finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchPrices(); }, [fetchPrices]);
+
+  // Freeze share counts as new prices arrive (only for tickers not yet frozen).
+  let frozenChanged = false;
+  PORTFOLIO_ALLOCATION.forEach(bucket => {
+    bucket.holdings.forEach(h => {
+      if (frozenRef.current[h.ticker]) return;
+      const p = prices[h.ticker]?.price;
+      if (p > 0) {
+        frozenRef.current[h.ticker] = {
+          shares: (h.pct / 100) * PORTFOLIO_BASELINE_USD / p,
+          baselinePrice: p,
+        };
+        frozenChanged = true;
+      }
+    });
+  });
+  if (frozenChanged) {
+    try { sessionStorage.setItem(LANDING_SHARES_KEY, JSON.stringify(frozenRef.current)); } catch {}
+  }
+
+  const buckets = PORTFOLIO_ALLOCATION.map(bucket => {
+    let value = 0, baseline = 0;
+    bucket.holdings.forEach(h => {
+      const f = frozenRef.current[h.ticker];
+      const p = prices[h.ticker]?.price;
+      if (f && p > 0) {
+        value    += f.shares * p;
+        baseline += f.shares * f.baselinePrice;
+      }
+    });
+    return { ...bucket, value, baseline };
+  });
+
+  const totalValue    = buckets.reduce((s, b) => s + b.value, 0);
+  const totalBaseline = buckets.reduce((s, b) => s + b.baseline, 0);
+  const dayChange     = totalValue - totalBaseline;
+  const dayChangePct  = totalBaseline > 0 ? (dayChange / totalBaseline) * 100 : 0;
+  const upDay         = dayChange >= 0;
+
+  const allFrozen = PORTFOLIO_ALLOCATION.every(b => b.holdings.every(h => frozenRef.current[h.ticker]));
+  const minAgo    = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+
+  const fmtFull = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
+
+  return (
+    <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: isMobile ? '16px 16px' : '22px 24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: isMobile ? 16 : 20 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={S.cardTitle}>Portfolio</div>
+          <div style={{
+            fontFamily: MONO,
+            fontSize: isMobile ? 26 : 38,
+            fontWeight: 700,
+            color: C.textPrimary,
+            letterSpacing: '0.5px',
+            lineHeight: 1.1,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {totalValue > 0 ? fmtFull(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+          </div>
+          <div style={{
+            fontFamily: MONO,
+            fontSize: isMobile ? 12 : 14,
+            fontWeight: 700,
+            color: totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
+            marginTop: 6,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {totalBaseline > 0 ? (
+              <>
+                {upDay ? '▲ +' : '▼ '}
+                {fmtShort(Math.abs(dayChange))}
+                {' '}
+                ({upDay ? '+' : ''}{dayChangePct.toFixed(2)}%) today
+              </>
+            ) : 'Loading prices…'}
+          </div>
+          {totalBaseline > 0 && !allFrozen && (
+            <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold, marginTop: 4 }}>
+              Some prices still loading — total fills in as they arrive
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+          {minAgo != null && (
+            <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted }}>
+              Prices: {minAgo === 0 ? 'just now' : `${minAgo}m ago`}
+            </span>
+          )}
+          <button
+            style={{ ...S.btnGhost, padding: '5px 12px', fontSize: 11, minHeight: 30 }}
+            onClick={fetchPrices}
+            disabled={loading}
+          >
+            {loading ? '⟳ …' : '↻ Refresh'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+        gap: isMobile ? 8 : 12,
+      }}>
+        {buckets.map(b => {
+          const pct = totalValue > 0 ? (b.value / totalValue) * 100 : 0;
+          return (
+            <div key={b.id} style={{
+              background: C.bgInput,
+              borderRadius: 6,
+              padding: isMobile ? '10px 12px' : '12px 14px',
+              borderLeft: `3px solid ${b.color}`,
+            }}>
+              <div style={{
+                fontFamily: MONO, fontSize: 9, fontWeight: 700,
+                color: b.color, letterSpacing: '0.8px',
+                textTransform: 'uppercase', marginBottom: 6,
+              }}>
+                {b.label}
+              </div>
+              <div style={{
+                fontFamily: MONO,
+                fontSize: isMobile ? 14 : 17,
+                fontWeight: 700,
+                color: C.textPrimary,
+                marginBottom: 3,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {b.value > 0 ? fmtShort(b.value) : '—'}
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                {totalValue > 0 ? `${pct.toFixed(2)}% of portfolio` : 'Loading…'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Global Markets Card ───────────────────────────────────────────────────────
 function GlobalMarketsCard({ onRefreshPrices, priceLoading, priceTs }) {
   const [now, setNow] = useState(() => new Date());
@@ -1088,6 +1325,9 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
 
   return (
     <div>
+      {/* ── Headline portfolio (live-priced model portfolio) ── */}
+      <LandingPortfolioCard />
+
       {/* Welcome area */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>

@@ -2,17 +2,20 @@
 //
 // Sources:
 //   Crypto       → CoinGecko (free, no key) — runs in parallel
-//   Stocks/ETFs  → Alpha Vantage GLOBAL_QUOTE, sequential, 1 s apart
+//   Stocks/ETFs  → Twelve Data /quote batch (single request, all tickers)
 //   Metals       → Alpha Vantage CURRENCY_EXCHANGE_RATE (XAU/USD, XAG/USD)
 //   Oil & Gas    → Alpha Vantage WTI + NATURAL_GAS function endpoints
 //   Forex        → Alpha Vantage CURRENCY_EXCHANGE_RATE (EUR/USD, USD/JPY, GBP/JPY)
-//   DXY proxy    → UUP ETF via GLOBAL_QUOTE, stored under 'DX-Y.NYB' key
+//   DXY proxy    → UUP ETF via Twelve Data, stored under 'DX-Y.NYB' key
 //
-// Rate-limit handling: 1 s delay between calls; if AV returns a rate-limit
-// Note/Information message, wait 12 s and retry once per ticker.
+// Rate-limit handling:
+//   - Twelve Data: surfaces the API's error message in the response/log;
+//     missing tickers fall through to `failed` and the UI degrades gracefully.
+//   - Alpha Vantage (fx/cmd only): 1 s gap between calls; on a rate-limit
+//     Note/Information, wait 12 s and retry once per ticker.
 //
 // Per-ticker cache persists across warm serverless invocations (in-process Map).
-// Time budget: bail out after BUDGET_MS so the function never hard-times-out.
+// Time budget: bail out of the AV loop after BUDGET_MS so the function never hard-times-out.
 
 const COIN_MAP = {
   BTC:  'bitcoin',
@@ -104,7 +107,7 @@ function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }); }
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function isRateLimited(data) {
+function isAvRateLimited(data) {
   const msg = (data?.Note || data?.Information || '');
   return typeof msg === 'string' && (
     msg.includes('API call frequency') ||
@@ -119,7 +122,7 @@ async function avFetch(url) {
     const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) return { ok: false };
     const data = await resp.json();
-    if (isRateLimited(data)) return { ok: false, rateLimited: true, data };
+    if (isAvRateLimited(data)) return { ok: false, rateLimited: true, data };
     return { ok: true, data };
   } catch {
     return { ok: false };
@@ -163,52 +166,127 @@ async function fetchCoinGecko() {
   return { prices, failed };
 }
 
-// ── Alpha Vantage — all non-crypto, sequential ───────────────────────────────
-async function fetchAllAV(apiKey, startTime, budgetMs) {
+// ── Twelve Data (stocks / ETFs) — one batch request per refresh ──────────────
+async function fetchStocksEtfsBatch(apiKey) {
+  const prices = {};
+  const failed = [];
+  const rateLimited = [];
+  let rateLimitMessage = null;
+
+  // Resolve cache hits up front so we only hit the network for missing tickers.
+  const equityTasks = AV_TASKS.filter(t => t.type === 'eq');
+  const tickersToFetch = [];
+  const taskBySym = new Map();
+
+  for (const task of equityTasks) {
+    const cacheKey = task.sym;
+    const storeKey = task.tk || task.sym;
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      prices[storeKey] = cached;
+      continue;
+    }
+    tickersToFetch.push(task.sym);
+    taskBySym.set(task.sym, task);
+  }
+
+  if (!tickersToFetch.length) {
+    return { prices, failed, rateLimited, rateLimitMessage };
+  }
+
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(tickersToFetch.join(','))}&apikey=${apiKey}`;
+  let data;
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) {
+      console.warn(`Twelve Data HTTP ${resp.status}`);
+      tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
+      return { prices, failed, rateLimited, rateLimitMessage };
+    }
+    data = await resp.json();
+  } catch (err) {
+    console.warn(`Twelve Data fetch failed: ${err?.message || err}`);
+    tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
+    return { prices, failed, rateLimited, rateLimitMessage };
+  }
+
+  // Top-level error: { code, message, status: 'error' } applies to the whole batch.
+  if (data && typeof data === 'object' && !Array.isArray(data)
+      && data.status === 'error' && typeof data.message === 'string') {
+    rateLimitMessage = data.message;
+    const isRateLimited = data.code === 429
+      || /credits|frequency|rate.?limit|run out|exceeded/i.test(data.message);
+    if (isRateLimited) {
+      console.warn(`Twelve Data rate-limited: ${data.message}`);
+      tickersToFetch.forEach(s => rateLimited.push(taskBySym.get(s).tk || s));
+    } else {
+      console.warn(`Twelve Data error: ${data.message}`);
+      tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
+    }
+    return { prices, failed, rateLimited, rateLimitMessage };
+  }
+
+  // For a single-symbol request Twelve Data returns the quote object directly,
+  // not nested under the symbol key. Detect from request size, not response shape.
+  const isSingle = tickersToFetch.length === 1;
+
+  for (const sym of tickersToFetch) {
+    const task = taskBySym.get(sym);
+    const storeKey = task.tk || task.sym;
+    const q = isSingle ? data : data?.[sym];
+
+    if (!q || q.status === 'error') {
+      failed.push(storeKey);
+      continue;
+    }
+    const price = parseFloat(q.close);
+    if (!(price > 0)) {
+      failed.push(storeKey);
+      continue;
+    }
+    const change    = parseFloat(q.change ?? '0') || 0;
+    const changePct = parseFloat(q.percent_change ?? '0') || 0;
+    const entry = { price, change, changePct, name: task.name || task.sym };
+    prices[storeKey] = entry;
+    cacheSet(sym, entry);
+  }
+
+  if (failed.length) {
+    console.warn(`Twelve Data: missing data for ${failed.join(', ')}`);
+  }
+
+  return { prices, failed, rateLimited, rateLimitMessage };
+}
+
+// ── Alpha Vantage — metals, oil/gas, forex (sequential) ──────────────────────
+async function fetchAvNonEquity(apiKey, startTime, budgetMs) {
   const prices      = {};
   const failed      = [];
   const rateLimited = [];
 
-  for (let i = 0; i < AV_TASKS.length; i++) {
-    const task = AV_TASKS[i];
+  const tasks = AV_TASKS.filter(t => t.type !== 'eq');
+
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
 
     // Bail if we've burned through the time budget — return partial results.
-    // Remaining tickers will show as blank; user can Refresh again (cache fills in).
     if (Date.now() - startTime > budgetMs) break;
 
     const { type } = task;
-    // Resolve the canonical cache key and the key used in the prices output
-    const cacheKey = task.sym || task.tk;  // 'UUP', 'GOLD', 'EURUSD=X', 'CL=F', …
-    const storeKey = task.tk || task.sym;  // 'DX-Y.NYB' for UUP, otherwise same as cacheKey
+    const cacheKey = task.tk;
+    const storeKey = task.tk;
 
-    // ── Serve from cache if fresh ────────────────────────────────────────────
     const cached = cacheGet(cacheKey);
     if (cached) {
       prices[storeKey] = cached;
-      continue; // No sleep needed — no AV call made
+      continue;
     }
 
     let entry = null;
     let rl    = false;
 
-    // ── GLOBAL_QUOTE (stocks / ETFs) ─────────────────────────────────────────
-    if (type === 'eq') {
-      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(task.sym)}&apikey=${apiKey}`;
-      const r   = await avFetchWithRetry(url);
-      if (r.rateLimited) {
-        rl = true;
-      } else if (r.ok) {
-        const q     = r.data?.['Global Quote'];
-        const price = q?.['05. price'] ? parseFloat(q['05. price']) : null;
-        if (price && price > 0) {
-          const change    = parseFloat(q['09. change'] || '0');
-          const changePct = parseFloat((q['10. change percent'] || '0%').replace('%', ''));
-          entry = { price, change, changePct, name: task.name || task.sym };
-        }
-      }
-
     // ── CURRENCY_EXCHANGE_RATE (metals + forex) ──────────────────────────────
-    } else if (type === 'fx') {
+    if (type === 'fx') {
       const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${task.from}&to_currency=${task.to}&apikey=${apiKey}`;
       const r   = await avFetchWithRetry(url);
       if (r.rateLimited) {
@@ -241,7 +319,6 @@ async function fetchAllAV(apiKey, startTime, budgetMs) {
       }
     }
 
-    // ── Record result ────────────────────────────────────────────────────────
     if (entry) {
       prices[storeKey] = entry;
       cacheSet(cacheKey, entry);
@@ -252,7 +329,7 @@ async function fetchAllAV(apiKey, startTime, budgetMs) {
     }
 
     // 1-second gap between AV calls (not after cache hits, not after the last task)
-    if (i < AV_TASKS.length - 1) await sleep(1000);
+    if (i < tasks.length - 1) await sleep(1000);
   }
 
   return { prices, failed, rateLimited };
@@ -263,28 +340,31 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const avApiKey  = process.env.ALPHA_VANTAGE_API_KEY;
+  const tdApiKey  = process.env.REACT_APP_TWELVE_DATA_API_KEY;
   const startTime = Date.now();
 
-  // Budget: 25 s — gives plenty of room on Vercel Pro (60 s default) and
-  // still returns well-prioritised partial results on shorter timeouts.
-  // On the first cold load with an empty cache and AV free-tier rate limits,
-  // the top-priority tickers (metals, oil/gas, indexes) will fit inside 8–9 s.
+  // Budget applies only to the sequential AV (fx/cmd) loop. Twelve Data is one
+  // batch call and CoinGecko is one batched call — both finish well inside it.
   const BUDGET_MS = 25000;
 
-  // CoinGecko (crypto) runs in parallel with all AV sequential calls.
-  const [cryptoResult, avResult] = await Promise.all([
+  const [cryptoResult, stocksResult, avResult] = await Promise.all([
     fetchCoinGecko(),
+    tdApiKey
+      ? fetchStocksEtfsBatch(tdApiKey)
+      : Promise.resolve({ prices: {}, failed: [], rateLimited: [], rateLimitMessage: null }),
     avApiKey
-      ? fetchAllAV(avApiKey, startTime, BUDGET_MS)
+      ? fetchAvNonEquity(avApiKey, startTime, BUDGET_MS)
       : Promise.resolve({ prices: {}, failed: [], rateLimited: [] }),
   ]);
 
-  const prices      = { ...avResult.prices, ...cryptoResult.prices };
-  const failed      = [...avResult.failed, ...cryptoResult.failed];
-  const rateLimited = avResult.rateLimited || [];
+  const prices      = { ...avResult.prices, ...stocksResult.prices, ...cryptoResult.prices };
+  const failed      = [...avResult.failed, ...stocksResult.failed, ...cryptoResult.failed];
+  const rateLimited = [...(avResult.rateLimited || []), ...(stocksResult.rateLimited || [])];
 
-  // If no AV key, surface a clear error alongside whatever crypto we got.
-  const extra = avApiKey ? {} : { error: 'ALPHA_VANTAGE_API_KEY not configured — only crypto prices available' };
+  const errors = [];
+  if (!tdApiKey) errors.push('REACT_APP_TWELVE_DATA_API_KEY not configured — stocks/ETFs unavailable');
+  if (!avApiKey) errors.push('ALPHA_VANTAGE_API_KEY not configured — metals, oil/gas, and forex unavailable');
+  if (stocksResult.rateLimitMessage) errors.push(`Twelve Data: ${stocksResult.rateLimitMessage}`);
 
   res.setHeader('Cache-Control', 'no-store'); // rely on in-process per-ticker cache
   return res.status(200).json({
@@ -292,6 +372,6 @@ export default async function handler(req, res) {
     failed,
     rateLimited,
     timestamp: new Date().toISOString(),
-    ...extra,
+    ...(errors.length ? { error: errors.join('; ') } : {}),
   });
 }

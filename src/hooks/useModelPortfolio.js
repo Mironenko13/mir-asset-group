@@ -73,12 +73,33 @@ function pricedTickerCount() {
 // freeze in one shot. This stops the bug where a load that dropped
 // SCHD/JEPI/GLD/SLV would freeze a $2.7M baseline.
 function freezeFromResponse(incoming) {
-  const allInResponse = ALL_TICKERS.every(t => (incoming?.[t]?.price ?? 0) > 0);
-  if (!allInResponse) return false;
+  const incomingKeys = incoming && typeof incoming === 'object' ? Object.keys(incoming) : [];
+  const received = ALL_TICKERS.filter(t => (incoming?.[t]?.price ?? 0) > 0);
+  const missing  = ALL_TICKERS.filter(t => !((incoming?.[t]?.price ?? 0) > 0));
+
+  console.log('[GATE] expected:', ALL_TICKERS);
+  console.log('[GATE] received:', received);
+  console.log('[GATE] missing:',  missing);
+  console.log('[GATE] incoming.prices keys (first 50):', incomingKeys.slice(0, 50));
+
+  const allInResponse = missing.length === 0;
+  if (!allInResponse) {
+    const willRetry = _retryAttempts < MAX_RETRY_ATTEMPTS;
+    if (willRetry) {
+      console.log(`[GATE] rejected response, retry ${_retryAttempts + 1}/${MAX_RETRY_ATTEMPTS}`);
+    } else {
+      console.log(`[GATE] rejected response, no more retries (exhausted ${MAX_RETRY_ATTEMPTS} attempts) — still missing:`, missing);
+    }
+    return false;
+  }
 
   const fullyFrozen = ALL_TICKERS.every(t => _state.frozen[t]);
-  if (fullyFrozen) return true;
+  if (fullyFrozen) {
+    console.log('[GATE] accepted — already fully frozen, no re-freeze needed');
+    return true;
+  }
 
+  console.log('[GATE] accepted — freezing shares for', ALL_TICKERS.length, 'tickers against baseline', PORTFOLIO_BASELINE_USD);
   const fresh = {};
   PORTFOLIO_ALLOCATION.forEach(bucket => {
     bucket.holdings.forEach(h => {
@@ -132,7 +153,11 @@ async function fetchModel({ silent = false } = {}) {
         return;
       }
       const data = await resp.json();
+      const topLevelKeys = data && typeof data === 'object' ? Object.keys(data) : [];
+      console.log('[GATE] /api/prices/market-overview top-level keys:', topLevelKeys);
       const incoming = data.prices || {};
+      console.log('[GATE] data.prices is object?', !!incoming && typeof incoming === 'object',
+        '· keys count:', Object.keys(incoming || {}).length);
       if (Object.keys(incoming).length > 0) {
         _state.prices = { ..._state.prices, ...incoming };
         _state.lastTs = Date.now();

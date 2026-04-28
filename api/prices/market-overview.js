@@ -167,6 +167,70 @@ async function fetchCoinGecko() {
 }
 
 // ── Twelve Data (stocks / ETFs) — one batch request per refresh ──────────────
+//
+// One batch call covers every uncached ticker. Twelve Data's free-tier rate
+// limit (8 credits/min, 1 credit per symbol on /quote) means a 40-symbol batch
+// can drop the tail end of the symbol list — Twelve Data fills what fits in
+// the per-minute window and silently omits the rest from the response. So we
+// run a second pass for any symbols that didn't come back, after a short
+// delay to let the per-minute window tick over a bit.
+
+// One Twelve Data /quote batch. Returns a per-symbol map from the request
+// symbol → either { entry: { price, change, changePct, name } } on success,
+// { error: true } for a per-symbol failure, or { rateLimited: true, message }
+// if the whole call was rate-limited at the top level.
+async function twelveDataBatch(apiKey, symbols, taskBySym) {
+  if (!symbols.length) return { results: new Map(), rateLimited: false, message: null, networkFailed: false };
+
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols.join(','))}&apikey=${apiKey}`;
+  let data;
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) {
+      console.warn(`Twelve Data HTTP ${resp.status}`);
+      return { results: new Map(), rateLimited: false, message: null, networkFailed: true };
+    }
+    data = await resp.json();
+  } catch (err) {
+    console.warn(`Twelve Data fetch failed: ${err?.message || err}`);
+    return { results: new Map(), rateLimited: false, message: null, networkFailed: true };
+  }
+
+  // Top-level error: { code, message, status: 'error' } applies to the whole batch.
+  if (data && typeof data === 'object' && !Array.isArray(data)
+      && data.status === 'error' && typeof data.message === 'string') {
+    const isRateLimited = data.code === 429
+      || /credits|frequency|rate.?limit|run out|exceeded/i.test(data.message);
+    const tag = isRateLimited ? 'rate-limited' : 'error';
+    console.warn(`Twelve Data ${tag}: ${data.message}`);
+    return { results: new Map(), rateLimited: isRateLimited, message: data.message, networkFailed: false };
+  }
+
+  // Single-symbol responses are returned unwrapped (no symbol key).
+  const isSingle = symbols.length === 1;
+  const results = new Map();
+
+  for (const sym of symbols) {
+    const task = taskBySym.get(sym);
+    const q = isSingle ? data : data?.[sym];
+
+    if (!q || q.status === 'error') {
+      results.set(sym, { error: true });
+      continue;
+    }
+    const price = parseFloat(q.close);
+    if (!(price > 0)) {
+      results.set(sym, { error: true });
+      continue;
+    }
+    const change    = parseFloat(q.change ?? '0') || 0;
+    const changePct = parseFloat(q.percent_change ?? '0') || 0;
+    results.set(sym, { entry: { price, change, changePct, name: task.name || task.sym } });
+  }
+
+  return { results, rateLimited: false, message: null, networkFailed: false };
+}
+
 async function fetchStocksEtfsBatch(apiKey) {
   const prices = {};
   const failed = [];
@@ -194,65 +258,59 @@ async function fetchStocksEtfsBatch(apiKey) {
     return { prices, failed, rateLimited, rateLimitMessage };
   }
 
-  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(tickersToFetch.join(','))}&apikey=${apiKey}`;
-  let data;
-  try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) {
-      console.warn(`Twelve Data HTTP ${resp.status}`);
-      tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
-      return { prices, failed, rateLimited, rateLimitMessage };
-    }
-    data = await resp.json();
-  } catch (err) {
-    console.warn(`Twelve Data fetch failed: ${err?.message || err}`);
+  // First batch.
+  const first = await twelveDataBatch(apiKey, tickersToFetch, taskBySym);
+
+  if (first.networkFailed) {
     tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
     return { prices, failed, rateLimited, rateLimitMessage };
   }
 
-  // Top-level error: { code, message, status: 'error' } applies to the whole batch.
-  if (data && typeof data === 'object' && !Array.isArray(data)
-      && data.status === 'error' && typeof data.message === 'string') {
-    rateLimitMessage = data.message;
-    const isRateLimited = data.code === 429
-      || /credits|frequency|rate.?limit|run out|exceeded/i.test(data.message);
-    if (isRateLimited) {
-      console.warn(`Twelve Data rate-limited: ${data.message}`);
-      tickersToFetch.forEach(s => rateLimited.push(taskBySym.get(s).tk || s));
-    } else {
-      console.warn(`Twelve Data error: ${data.message}`);
-      tickersToFetch.forEach(s => failed.push(taskBySym.get(s).tk || s));
-    }
+  if (first.rateLimited) {
+    rateLimitMessage = first.message;
+    tickersToFetch.forEach(s => rateLimited.push(taskBySym.get(s).tk || s));
     return { prices, failed, rateLimited, rateLimitMessage };
   }
 
-  // For a single-symbol request Twelve Data returns the quote object directly,
-  // not nested under the symbol key. Detect from request size, not response shape.
-  const isSingle = tickersToFetch.length === 1;
-
-  for (const sym of tickersToFetch) {
+  const recordResult = (sym, r) => {
     const task = taskBySym.get(sym);
     const storeKey = task.tk || task.sym;
-    const q = isSingle ? data : data?.[sym];
+    if (r?.entry) {
+      prices[storeKey] = r.entry;
+      cacheSet(sym, r.entry);
+      return true;
+    }
+    return false;
+  };
 
-    if (!q || q.status === 'error') {
-      failed.push(storeKey);
-      continue;
-    }
-    const price = parseFloat(q.close);
-    if (!(price > 0)) {
-      failed.push(storeKey);
-      continue;
-    }
-    const change    = parseFloat(q.change ?? '0') || 0;
-    const changePct = parseFloat(q.percent_change ?? '0') || 0;
-    const entry = { price, change, changePct, name: task.name || task.sym };
-    prices[storeKey] = entry;
-    cacheSet(sym, entry);
+  const stillMissing = [];
+  for (const sym of tickersToFetch) {
+    if (!recordResult(sym, first.results.get(sym))) stillMissing.push(sym);
   }
 
-  if (failed.length) {
-    console.warn(`Twelve Data: missing data for ${failed.join(', ')}`);
+  // Retry pass: anything missing from the first response gets a second shot
+  // after a short delay. Twelve Data's free tier silently drops the tail of
+  // long batches when the per-minute credit window fills, so a second smaller
+  // batch usually picks them up.
+  if (stillMissing.length) {
+    console.warn(`Twelve Data: missing on first pass — retrying ${stillMissing.length} ticker(s): ${stillMissing.join(', ')}`);
+    await sleep(1500);
+    const second = await twelveDataBatch(apiKey, stillMissing, taskBySym);
+    if (second.rateLimited) {
+      rateLimitMessage = second.message;
+      stillMissing.forEach(s => rateLimited.push(taskBySym.get(s).tk || s));
+    } else if (second.networkFailed) {
+      stillMissing.forEach(s => failed.push(taskBySym.get(s).tk || s));
+    } else {
+      const afterRetry = [];
+      for (const sym of stillMissing) {
+        if (!recordResult(sym, second.results.get(sym))) afterRetry.push(sym);
+      }
+      if (afterRetry.length) {
+        afterRetry.forEach(s => failed.push(taskBySym.get(s).tk || s));
+        console.warn(`Twelve Data: still missing after retry — ${afterRetry.join(', ')}`);
+      }
+    }
   }
 
   return { prices, failed, rateLimited, rateLimitMessage };

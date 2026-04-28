@@ -1,9 +1,15 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import {
-  PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
+  Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
   AreaChart, Area, ReferenceLine,
 } from 'recharts';
+import {
+  PORTFOLIO_TAB_BUCKET_ORDER,
+  BORROWING_LTV_PCT,
+  MONTHLY_DRAW_PCT,
+} from './constants/portfolio';
+import { useModelPortfolio } from './hooks/useModelPortfolio';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const MONTHLY_NET = 6185;
@@ -127,52 +133,8 @@ const MARKET_SECTIONS = [
   ]},
 ];
 
-// ─── Landing Portfolio Allocation ──────────────────────────────────────────────
-// Target weights at session baseline. On first live-price fetch we back-calculate
-// share counts against PORTFOLIO_BASELINE_USD and freeze them — total then moves
-// naturally with live prices. Edit here to retune the model portfolio.
-const PORTFOLIO_BASELINE_USD = 4_732_481;
-const PORTFOLIO_ALLOCATION = [
-  { id: 'equities',  label: 'Equities',             color: '#5b8af0', holdings: [
-    { ticker: 'QQQ',   pct: 8 },
-    { ticker: 'VTI',   pct: 6 },
-    { ticker: 'SPY',   pct: 4 },
-    { ticker: 'NVDA',  pct: 4 },
-    { ticker: 'MSFT',  pct: 3 },
-    { ticker: 'AAPL',  pct: 3 },
-    { ticker: 'GOOGL', pct: 2 },
-    { ticker: 'TSLA',  pct: 2 },
-    { ticker: 'AMD',   pct: 2 },
-    { ticker: 'PLTR',  pct: 2 },
-    { ticker: 'SMCI',  pct: 2 },
-    { ticker: 'JPM',   pct: 2 },
-  ]},
-  { id: 'crypto',    label: 'Crypto',               color: '#f0a030', holdings: [
-    { ticker: 'XRP',   pct: 12 },
-    { ticker: 'BTC',   pct: 8  },
-    { ticker: 'ETH',   pct: 5  },
-  ]},
-  { id: 'dividends', label: 'Dividends',            color: '#5ab87a', holdings: [
-    { ticker: 'SCHD',  pct: 6 },
-    { ticker: 'JEPI',  pct: 4 },
-    { ticker: 'O',     pct: 3 },
-    { ticker: 'MO',    pct: 2 },
-  ]},
-  { id: 'quantum',   label: 'Quantum / Emerging',   color: '#a78bfa', holdings: [
-    { ticker: 'IONQ',  pct: 2.5 },
-    { ticker: 'RGTI',  pct: 2.5 },
-  ]},
-  { id: 'metals',    label: 'Precious Metals',      color: '#c9a84c', holdings: [
-    { ticker: 'GLD',   pct: 5 },
-    { ticker: 'SLV',   pct: 3 },
-  ]},
-  { id: 'energy',    label: 'Energy / Commodities', color: '#e07040', holdings: [
-    { ticker: 'XLE',   pct: 3 },
-    { ticker: 'USO',   pct: 2 },
-    { ticker: 'URA',   pct: 2 },
-  ]},
-];
-const LANDING_SHARES_KEY = 'mag_landing_shares';
+// PORTFOLIO_ALLOCATION, PORTFOLIO_BASELINE_USD, LANDING_SHARES_KEY now live in
+// src/constants/portfolio.js — imported above. Edit the allocation there.
 
 // Tickers shown in the slim dashboard snapshot strip
 const SNAPSHOT_TICKERS = [
@@ -725,7 +687,7 @@ export default function App() {
   const [nwMilestones,   setNwMilestones]    = useLocalStorage('mag_nw_milestones',   []);
   const [givingEntries,  setGivingEntries]   = useLocalStorage('mag_giving',          []);
   const [roadmapSavings, setRoadmapSavings]  = useLocalStorage('mag_roadmap_savings', {});
-  const [targets,        setTargets]         = useLocalStorage('mag_targets',         {});
+  const [targets]                            = useLocalStorage('mag_targets',         {});
   const [transactions,   setTransactions]    = useLocalStorage('mag_transactions',    []);
   const [priceCache,     setPriceCache]      = useLocalStorage('mag_prices',          {});
   const [priceTs,        setPriceTs]         = useState(() => {
@@ -912,13 +874,8 @@ export default function App() {
           <PortfolioTab
             positions={positions}
             setPositions={setPositions}
-            targets={targets}
-            setTargets={setTargets}
             transactions={transactions}
             setTransactions={setTransactions}
-            onRefreshPrices={() => fetchAndUpdatePrices(true)}
-            priceLoading={priceLoading}
-            priceTs={priceTs}
           />
         )}
         {tab === 'spending'  && <SpendingTab expenses={expenses} setExpenses={setExpenses} />}
@@ -964,88 +921,10 @@ export default function App() {
 // it doesn't add a second polling loop.
 function LandingPortfolioCard() {
   const isMobile = useIsMobile();
-
-  const [prices, setPrices] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mag_market_prices') || '{}'); }
-    catch { return {}; }
-  });
-  const [loading, setLoading] = useState(false);
-  const [lastTs,  setLastTs]  = useState(() => {
-    try { const ts = localStorage.getItem('mag_market_prices_ts'); return ts ? parseInt(ts, 10) : null; }
-    catch { return null; }
-  });
-
-  // Frozen share counts + per-ticker baseline price (the price at the moment we
-  // first saw it this session). Persisted to sessionStorage so navigating between
-  // dashboard tabs doesn't re-freeze at moved prices.
-  const frozenRef = useRef(null);
-  if (frozenRef.current == null) {
-    try { frozenRef.current = JSON.parse(sessionStorage.getItem(LANDING_SHARES_KEY) || '{}'); }
-    catch { frozenRef.current = {}; }
-  }
-
-  const fetchPrices = useCallback(async () => {
-    setLoading(true);
-    try {
-      const resp = await fetch('/api/prices/market-overview');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const incoming = data.prices || {};
-      if (Object.keys(incoming).length === 0) return;
-      setPrices(prev => {
-        const merged = { ...prev, ...incoming };
-        try {
-          localStorage.setItem('mag_market_prices', JSON.stringify(merged));
-          localStorage.setItem('mag_market_prices_ts', String(Date.now()));
-        } catch {}
-        return merged;
-      });
-      setLastTs(Date.now());
-    } catch {} finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { fetchPrices(); }, [fetchPrices]);
-
-  // Freeze share counts as new prices arrive (only for tickers not yet frozen).
-  let frozenChanged = false;
-  PORTFOLIO_ALLOCATION.forEach(bucket => {
-    bucket.holdings.forEach(h => {
-      if (frozenRef.current[h.ticker]) return;
-      const p = prices[h.ticker]?.price;
-      if (p > 0) {
-        frozenRef.current[h.ticker] = {
-          shares: (h.pct / 100) * PORTFOLIO_BASELINE_USD / p,
-          baselinePrice: p,
-        };
-        frozenChanged = true;
-      }
-    });
-  });
-  if (frozenChanged) {
-    try { sessionStorage.setItem(LANDING_SHARES_KEY, JSON.stringify(frozenRef.current)); } catch {}
-  }
-
-  const buckets = PORTFOLIO_ALLOCATION.map(bucket => {
-    let value = 0, baseline = 0;
-    bucket.holdings.forEach(h => {
-      const f = frozenRef.current[h.ticker];
-      const p = prices[h.ticker]?.price;
-      if (f && p > 0) {
-        value    += f.shares * p;
-        baseline += f.shares * f.baselinePrice;
-      }
-    });
-    return { ...bucket, value, baseline };
-  });
-
-  const totalValue    = buckets.reduce((s, b) => s + b.value, 0);
-  const totalBaseline = buckets.reduce((s, b) => s + b.baseline, 0);
-  const dayChange     = totalValue - totalBaseline;
-  const dayChangePct  = totalBaseline > 0 ? (dayChange / totalBaseline) * 100 : 0;
-  const upDay         = dayChange >= 0;
-
-  const allFrozen = PORTFOLIO_ALLOCATION.every(b => b.holdings.every(h => frozenRef.current[h.ticker]));
-  const minAgo    = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+  const model = useModelPortfolio();
+  const { buckets, totalValue, totalBaseline, dayChange, dayChangePct, allFrozen, lastTs, loading, refresh } = model;
+  const upDay   = dayChange >= 0;
+  const minAgo  = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
 
   const fmtFull = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
@@ -1097,7 +976,7 @@ function LandingPortfolioCard() {
           )}
           <button
             style={{ ...S.btnGhost, padding: '5px 12px', fontSize: 11, minHeight: 30 }}
-            onClick={fetchPrices}
+            onClick={refresh}
             disabled={loading}
           >
             {loading ? '⟳ …' : '↻ Refresh'}
@@ -1291,18 +1170,33 @@ function KpiCard({ label, value, sub, subColor, accent, onClick }) {
 function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddExpense, onTabSwitch, targets, transactions, onRefreshPrices, priceLoading, priceTs }) {
   const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const { totalValue, alloc } = useMemo(() => portfolioStats(positions), [positions]);
+  const { alloc } = useMemo(() => portfolioStats(positions), [positions]);
   const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
+
+  // Live model portfolio drives the headline KPI cards (portfolio total, day
+  // change, borrowing power, monthly draw budget). Single shared hook → no
+  // duplicate fetches with LandingPortfolioCard.
+  const model = useModelPortfolio();
+  const portfolioTotal = model.totalValue;
+  const portfolioDayChange    = model.dayChange;
+  const portfolioDayChangePct = model.dayChangePct;
+  const portfolioReady        = model.totalBaseline > 0;
 
   const thisMonthExp = useMemo(() => expenses.filter(e => e.date.startsWith(CURRENT_MONTH)), [expenses]);
   const monthlyTithe = Math.round(MONTHLY_GROSS * TITHE_RATE);
   const monthlySpend = thisMonthExp.reduce((s, e) => s + e.amount, 0);
-  const deployable = MONTHLY_NET - monthlyTithe - monthlySpend;
+  // "Available to Invest" — keep the existing tithe/expenses subtraction but
+  // size the underlying monthly figure off the live portfolio (3.5%/mo draw).
+  const monthlyPortfolioDraw = portfolioTotal * MONTHLY_DRAW_PCT;
+  const deployable = monthlyPortfolioDraw - monthlyTithe - monthlySpend;
 
-  const openPositions = useMemo(() => positions.filter(p => (p.status || 'Open') !== 'Closed'), [positions]);
-  const totalCost = useMemo(() => openPositions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [openPositions]);
-  const unrealizedPnl = totalValue - totalCost;
-  const totalPnlPct = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0;
+  // Borrowing power: buy-borrow-die LTV against the live portfolio total.
+  const borrowingPower = portfolioTotal * BORROWING_LTV_PCT;
+
+  // Month's P&L — real MTD requires historical daily snapshots we don't track
+  // yet, so for now this mirrors the day change off the session baseline.
+  const monthPnl    = portfolioDayChange;
+  const monthPnlPct = portfolioDayChangePct;
 
   const checklistItems = [
     { key: 'portfolio', label: 'Add your first position',        tab: 'portfolio', done: positions.length > 0 },
@@ -1346,33 +1240,37 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         <KpiCard
           label="Your Portfolio"
-          value={fmt$(totalValue, 0)}
-          sub={(unrealizedPnl >= 0 ? '▲ +' : '▼ ') + Math.abs(totalPnlPct).toFixed(1) + '% total return'}
-          subColor={unrealizedPnl >= 0 ? C.green : C.red}
+          value={portfolioTotal > 0 ? fmt$(portfolioTotal, 0) : '—'}
+          sub={portfolioReady
+            ? (portfolioDayChange >= 0 ? '▲ +' : '▼ ') + Math.abs(portfolioDayChangePct).toFixed(2) + '% today'
+            : 'Loading prices…'}
+          subColor={portfolioReady ? (portfolioDayChange >= 0 ? C.green : C.red) : C.textMuted}
           accent="#d4a843"
           onClick={() => onTabSwitch('portfolio')}
         />
         <KpiCard
           label="Available to Invest"
-          value={fmt$(deployable, 0)}
-          sub="after tithe and expenses"
+          value={portfolioTotal > 0 ? fmt$(deployable, 0) : '—'}
+          sub={portfolioTotal > 0 ? '3.5%/mo draw, less tithe & expenses' : 'Loading prices…'}
           subColor={deployable >= 0 ? C.green : C.red}
           accent={deployable >= 0 ? C.green : C.red}
           onClick={() => onTabSwitch('spending')}
         />
         <KpiCard
           label="Borrowing Power"
-          value={fmt$(totalValue * 0.4, 0)}
-          sub="40% of your portfolio"
+          value={portfolioTotal > 0 ? fmt$(borrowingPower, 0) : '—'}
+          sub="40% LTV against portfolio"
           accent="#6366f1"
           onClick={() => onTabSwitch('roadmap')}
         />
         <KpiCard
           label="Month's P&L"
-          value={(unrealizedPnl >= 0 ? '+' : '') + fmt$(unrealizedPnl, 0)}
-          sub="how your investments moved"
-          subColor={unrealizedPnl >= 0 ? C.green : C.red}
-          accent={unrealizedPnl >= 0 ? C.green : C.red}
+          value={portfolioReady ? (monthPnl >= 0 ? '+' : '') + fmt$(monthPnl, 0) : '—'}
+          sub={portfolioReady
+            ? (monthPnl >= 0 ? '+' : '') + monthPnlPct.toFixed(2) + '% — day-change proxy'
+            : 'Loading prices…'}
+          subColor={portfolioReady ? (monthPnl >= 0 ? C.green : C.red) : C.textMuted}
+          accent={portfolioReady ? (monthPnl >= 0 ? C.green : C.red) : '#d4a843'}
           onClick={() => onTabSwitch('portfolio')}
         />
       </div>
@@ -1541,63 +1439,21 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
 }
 
 // ─── Portfolio Tab ─────────────────────────────────────────────────────────────
-function PortfolioTab({ positions, setPositions, targets, setTargets, transactions, setTransactions, onRefreshPrices, priceLoading, priceTs }) {
+function PortfolioTab({ positions, setPositions, transactions, setTransactions }) {
   const isMobile = useIsMobile();
-  const [showAdd,       setShowAdd]       = useState(false);
-  const [editPos,       setEditPos]       = useState(null);
-  const [sortKey,       setSortKey]       = useState('assetClass');
-  const [sortDir,       setSortDir]       = useState(1);
-  const [editingTarget, setEditingTarget] = useState(null);
-  const [targetInput,   setTargetInput]   = useState('');
-  const [sellPos,       setSellPos]       = useState(null);
-  const [portfolioView, setPortfolioView] = useState('positions'); // 'positions' | 'history'
+  const model = useModelPortfolio();
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [editPos,    setEditPos]    = useState(null);
+  const [sellPos,    setSellPos]    = useState(null);
+  const [showCustom, setShowCustom] = useState(false);
 
-  const { totalValue, byBucket, alloc } = useMemo(() => portfolioStats(positions), [positions]);
-  const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
-  const totalCost = useMemo(() => positions.reduce((s, p) => s + p.quantity * p.avgCost, 0), [positions]);
-  const totalPnl = totalValue - totalCost;
-  const realizedPnl = useMemo(() => (transactions || []).reduce((s, t) => s + (t.realizedPnl || 0), 0), [transactions]);
-
-  // Asset classes present in portfolio
-  const allBucketNames = useMemo(() => {
-    return Object.keys(alloc).filter(k => (alloc[k] || 0) > 0);
-  }, [alloc]);
-
-  const pieData = useMemo(() => allBucketNames.map(name => ({
-    name, value: Math.max(parseFloat((alloc[name] || 0).toFixed(1)), 0.01),
-  })), [allBucketNames, alloc]);
-
-  const barData = useMemo(() => allBucketNames.map(name => ({
-    name,
-    actual: parseFloat((alloc[name] || 0).toFixed(1)),
-    target: targets[name] != null ? targets[name] : undefined,
-  })), [allBucketNames, alloc, targets]);
-
-  const sortedPositions = useMemo(() => {
-    return positions.map(migratePosition).sort((a, b) => {
-      if (sortKey === 'assetClass') return (a.assetClass || '').localeCompare(b.assetClass || '') * sortDir;
-      if (sortKey === 'ticker') return a.ticker.localeCompare(b.ticker) * sortDir;
-      let av = 0, bv = 0;
-      if (sortKey === 'value')       { av = a.quantity * a.currentPrice; bv = b.quantity * b.currentPrice; }
-      else if (sortKey === 'pnl')    { av = (a.currentPrice - a.avgCost) * a.quantity; bv = (b.currentPrice - b.avgCost) * b.quantity; }
-      else if (sortKey === 'pnlPct') { av = a.avgCost > 0 ? (a.currentPrice - a.avgCost) / a.avgCost : 0; bv = b.avgCost > 0 ? (b.currentPrice - b.avgCost) / b.avgCost : 0; }
-      else if (sortKey === 'alloc')  { av = alloc[a.assetClass] || 0; bv = alloc[b.assetClass] || 0; }
-      return (av - bv) * sortDir;
-    });
-  }, [positions, sortKey, sortDir, alloc]);
-
-  const toggleSort = (k) => { if (sortKey === k) setSortDir(d => -d); else { setSortKey(k); setSortDir(-1); } };
-  const sortIcon   = (k) => sortKey === k ? (sortDir === -1 ? ' &#8595;' : ' &#8593;') : '';
-
-  const saveTarget = (name) => {
-    const v = parseFloat(targetInput);
-    if (!isNaN(v) && v >= 0 && v <= 100) {
-      setTargets(prev => ({ ...prev, [name]: v }));
-    }
-    setEditingTarget(null);
-    setTargetInput('');
-  };
-  const removeTarget = (name) => setTargets(prev => { const n = { ...prev }; delete n[name]; return n; });
+  // Bucket sections rendered in a deliberate order: equities biggest, then
+  // crypto, dividends, energy, metals, quantum/emerging.
+  const orderedBuckets = useMemo(() => (
+    PORTFOLIO_TAB_BUCKET_ORDER
+      .map(id => model.buckets.find(b => b.id === id))
+      .filter(Boolean)
+  ), [model.buckets]);
 
   const handleSave = (pos) => {
     if (pos.id) { setPositions(p => p.map(x => x.id === pos.id ? pos : x)); }
@@ -1606,229 +1462,170 @@ function PortfolioTab({ positions, setPositions, targets, setTargets, transactio
   };
   const handleDelete = (id) => { if (window.confirm('Delete this position?')) setPositions(p => p.filter(x => x.id !== id)); };
 
+  const fmtFull   = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtShares = (n) => n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 4 : 2 });
+  const fmtPrice  = (n) => n == null || !(n > 0) ? '—' : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const minAgo = model.lastTs ? Math.round((Date.now() - model.lastTs) / 60000) : null;
+  const upDay  = model.dayChange >= 0;
+  const totalValue = model.totalValue;
+
   return (
     <div>
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Portfolio Tracker</div>
-          {positions.length > 0 && (
-            <div style={{ fontSize: 12, color: '#9a9880', marginTop: 2 }}>
-              {fmt$(totalValue, 0)} &middot; Unrealized: <span style={{ color: totalPnl >= 0 ? '#5ab87a' : '#c45555', fontWeight: 700 }}>{fmt$(totalPnl, 0)}</span>
-              {realizedPnl !== 0 && <> &middot; Realized: <span style={{ color: realizedPnl >= 0 ? '#5ab87a' : '#c45555', fontWeight: 700 }}>{fmt$(realizedPnl, 0)}</span></>}
-            </div>
-          )}
+          <div style={{ fontFamily: SERIF, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: C.textPrimary }}>Portfolio</div>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, marginTop: 2, letterSpacing: '0.4px' }}>
+            Live model · {model.positionCount} holdings · {model.bucketCount} buckets
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {priceTs && <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted }}>Updated {Math.round((Date.now() - priceTs) / 60000)}m ago</span>}
-          <button style={{ ...S.btnGhost, minHeight: 44, fontSize: 12 }} onClick={onRefreshPrices} disabled={priceLoading}>
-            {priceLoading ? '⟳' : '↻'} Live Prices
+          {minAgo != null && (
+            <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted }}>
+              Prices: {minAgo === 0 ? 'just now' : `${minAgo}m ago`}
+            </span>
+          )}
+          <button style={{ ...S.btnGhost, minHeight: 36, fontSize: 12 }} onClick={model.refresh} disabled={model.loading}>
+            {model.loading ? '⟳ …' : '↻ Refresh'}
           </button>
-          <button style={{ ...S.btn, minHeight: 44 }} onClick={() => setShowAdd(true)}>+ Add Position</button>
+          <button style={{ ...S.btnGhost, minHeight: 36, fontSize: 12 }} onClick={() => setShowAdd(true)}>+ Custom</button>
         </div>
       </div>
 
-      {/* Sub-tab nav */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-        {[
-          { id: 'positions', label: `Open Positions (${positions.filter(p => (p.status||'Open') !== 'Closed').length})` },
-          { id: 'history',   label: `Trade History (${(transactions||[]).length})` },
-        ].map(v => (
-          <button key={v.id} onClick={() => setPortfolioView(v.id)} style={{
-            fontFamily: MONO, fontSize: 12, padding: '8px 14px', borderRadius: 6, minHeight: 36,
-            border: `1px solid ${portfolioView === v.id ? C.gold : C.border}`,
-            background: portfolioView === v.id ? 'rgba(201,168,76,0.1)' : 'transparent',
-            color: portfolioView === v.id ? C.gold : C.textSec, cursor: 'pointer',
-          }}>
-            {v.label}
-          </button>
-        ))}
+      {/* ── Summary row (Dashboard headline styling) ──────────────────── */}
+      <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: isMobile ? '14px 16px' : '20px 24px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gap: isMobile ? 14 : 22,
+        }}>
+          <div>
+            <div style={S.cardTitle}>Total Portfolio Value</div>
+            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {totalValue > 0 ? fmtFull(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+            </div>
+          </div>
+          <div>
+            <div style={S.cardTitle}>Day Change</div>
+            <div style={{
+              fontFamily: MONO,
+              fontSize: isMobile ? 20 : 28,
+              fontWeight: 700,
+              color: model.totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
+              fontVariantNumeric: 'tabular-nums',
+              lineHeight: 1.1,
+            }}>
+              {model.totalBaseline > 0
+                ? (upDay ? '+' : '') + fmtFull(model.dayChange)
+                : '—'}
+            </div>
+            {model.totalBaseline > 0 && (
+              <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                {(upDay ? '+' : '') + model.dayChangePct.toFixed(2)}% today
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={S.cardTitle}># of Positions</div>
+            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {model.positionCount}
+            </div>
+          </div>
+          <div>
+            <div style={S.cardTitle}># of Buckets</div>
+            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {model.bucketCount}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Drift alerts ── */}
-      {alerts.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          {alerts.map(a => (
-            <div key={a.bucket} style={S.alert}>
-              <span style={S.tag(getAssetClassColor(a.bucket))}>{a.bucket}</span>
-              <span style={{ color: '#9a9880', fontSize: isMobile ? 11 : 13 }}>{a.actual.toFixed(1)}% vs {a.target}% target</span>
-              <span style={{ marginLeft: 'auto', fontWeight: 700, color: a.drift > 0 ? '#c45555' : '#5ab87a' }}>
-                {a.drift > 0 ? '+' : ''}{a.drift.toFixed(1)}% drift
-              </span>
+      {/* ── Bucket sections ───────────────────────────────────────────── */}
+      {orderedBuckets.map(bucket => {
+        const bucketPctOfPortfolio = totalValue > 0 ? (bucket.value / totalValue) * 100 : 0;
+        return (
+          <div key={bucket.id} style={{ ...S.card, marginBottom: 18, borderTop: `2px solid ${bucket.color}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color }} />
+                <div style={{ fontFamily: SERIF, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
+                  {bucket.label}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 700, color: C.gold }}>
+                  {bucket.value > 0 ? fmtFull(bucket.value) : '—'}
+                </span>
+                <span style={{ fontSize: 11, color: C.textMuted }}>
+                  {totalValue > 0 ? `${bucketPctOfPortfolio.toFixed(2)}% of portfolio` : ''}
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {portfolioView === 'history' && (
-        <TradeHistoryPanel transactions={transactions || []} onClear={() => setTransactions([])} />
-      )}
-
-      {portfolioView === 'positions' && positions.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 20 }}>
-          {/* Donut chart */}
-          <div style={S.card}>
-            <div style={S.cardTitle}>Actual Allocation — {fmt$(totalValue, 0)}</div>
-            <ResponsiveContainer width="100%" height={190}>
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
-                  {pieData.map((entry) => <Cell key={entry.name} fill={getAssetClassColor(entry.name)} />)}
-                </Pie>
-                <RTooltip formatter={(v, n) => [`${v}%`, n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Asset class legend + target setter */}
-            <div style={{ marginTop: 8 }}>
-              {allBucketNames.map(name => {
-                const color = getAssetClassColor(name);
-                const tgt = targets[name];
-                return (
-                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: `1px solid ${C.bgPrimary}`, flexWrap: 'wrap' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: C.textSec, flex: 1, minWidth: 90 }}>{name}</span>
-                    <span style={{ fontSize: 11, color: C.textMuted }}>{fmt$(byBucket[name] || 0, 0)}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, minWidth: 36, textAlign: 'right' }}>{(alloc[name] || 0).toFixed(1)}%</span>
-                    {editingTarget === name ? (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <input
-                          autoFocus
-                          type="number" min="0" max="100" step="0.5"
-                          value={targetInput}
-                          onChange={e => setTargetInput(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveTarget(name); if (e.key === 'Escape') { setEditingTarget(null); setTargetInput(''); } }}
-                          placeholder="target %"
-                          style={{ ...S.inputStyle, width: 72, padding: '3px 7px', fontSize: 12 }}
-                        />
-                        <button style={{ ...S.btn, padding: '3px 8px', fontSize: 11, minHeight: 28 }} onClick={() => saveTarget(name)}>✓</button>
-                        <button style={{ ...S.btnGhost, padding: '3px 7px', fontSize: 11, minHeight: 28 }} onClick={() => { setEditingTarget(null); setTargetInput(''); }}>✕</button>
-                      </div>
-                    ) : tgt != null ? (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: '#9a9880' }}>→ {tgt}%</span>
-                        <button onClick={() => { setEditingTarget(name); setTargetInput(String(tgt)); }} style={{ ...S.btnGhost, padding: '2px 6px', fontSize: 10, minHeight: 24 }}>✎</button>
-                        <button onClick={() => removeTarget(name)} style={{ ...S.btnDanger, padding: '2px 5px', minHeight: 24 }}>✕</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setEditingTarget(name); setTargetInput(''); }} style={{ ...S.btnGhost, padding: '2px 8px', fontSize: 10, minHeight: 24, color: '#9a9880' }}>
-                        Set target
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ ...S.table, minWidth: 560 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
+                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Shares</th>
+                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Live Price</th>
+                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Position Value</th>
+                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Bucket</th>
+                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bucket.holdings.map(h => {
+                    const pctOfBucket = bucket.value > 0 ? (h.value / bucket.value) * 100 : 0;
+                    const pctOfTotal  = totalValue   > 0 ? (h.value / totalValue)   * 100 : 0;
+                    return (
+                      <tr key={h.ticker}>
+                        <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>{h.ticker}</td>
+                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtShares(h.shares)}
+                        </td>
+                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtPrice(h.livePrice)}
+                        </td>
+                        <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
+                          {h.value > 0 ? fmtFull(h.value) : '—'}
+                        </td>
+                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                          {bucket.value > 0 && h.value > 0 ? pctOfBucket.toFixed(2) + '%' : '—'}
+                        </td>
+                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                          {totalValue > 0 && h.value > 0 ? pctOfTotal.toFixed(2) + '%' : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
+        );
+      })}
 
-          {/* Bar chart */}
-          <div style={S.card}>
-            <div style={S.cardTitle}>Allocation — Actual vs Target (%)</div>
-            <ResponsiveContainer width="100%" height={isMobile ? 220 : 215}>
-              <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-                <XAxis dataKey="name" tick={{ fill: '#9a9880', fontSize: 9 }} />
-                <YAxis tick={{ fill: '#9a9880', fontSize: 10 }} />
-                <RTooltip formatter={(v, n) => v != null ? [`${v}%`, n] : ['–', n]} contentStyle={{ background: '#0f231a', border: '1px solid #2a4a3a', borderRadius: 8, color: '#e8e4d8', fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="target" fill="#2d3748" name="Target %" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="actual" fill="#d4a843" name="Actual %" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* ── Custom user positions (preserved when present) ────────────── */}
+      {(positions.length > 0 || showCustom) && (
+        <CustomPositionsPanel
+          positions={positions}
+          transactions={transactions || []}
+          onEdit={setEditPos}
+          onSell={setSellPos}
+          onDelete={handleDelete}
+          onClearTransactions={() => setTransactions([])}
+          isMobile={isMobile}
+        />
       )}
-
-      {/* ── Position table ── */}
-      {portfolioView === 'positions' && positions.length === 0 ? (
-        <div style={{ ...S.card, textAlign: 'center', padding: '60px 24px' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📈</div>
-          <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Start building your portfolio.</div>
-          <div style={{ fontFamily: MONO, fontSize: 13, color: C.textSec, marginBottom: 24, maxWidth: 340, margin: '0 auto 24px' }}>
-            Add your first investment — stocks, crypto, gold, whatever you hold.
-          </div>
-          <button style={{ ...S.btn, minHeight: 52, fontSize: 15, padding: '14px 28px' }} onClick={() => setShowAdd(true)}>
-            Add Your First Position
+      {!showCustom && positions.length === 0 && (
+        <div style={{ marginTop: 12, textAlign: 'center' }}>
+          <button style={{ ...S.btnGhost, fontSize: 11 }} onClick={() => setShowCustom(true)}>
+            + Add a custom (off-model) position
           </button>
         </div>
-      ) : portfolioView === 'positions' ? (
-        <div style={S.card}>
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ ...S.table, minWidth: 680 }}>
-              <thead>
-                <tr>
-                  {[['ticker','Ticker'],['assetClass','Class'],['value','Value'],['pnl','P&L'],['alloc','Alloc %']].map(([k, lbl]) => (
-                    <th key={k} style={S.th} onClick={() => toggleSort(k)} dangerouslySetInnerHTML={{ __html: lbl + sortIcon(k) }} />
-                  ))}
-                  <th style={{ ...S.th, cursor: 'default' }}>Qty</th>
-                  <th style={{ ...S.th, cursor: 'default' }}>Avg Cost</th>
-                  <th style={{ ...S.th, cursor: 'default' }}>Price</th>
-                  <th style={{ ...S.th, cursor: 'default' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedPositions.map(pos => {
-                  const val      = pos.quantity * pos.currentPrice;
-                  const pnl      = pos.assetClass === 'Cash' ? 0 : (pos.currentPrice - pos.avgCost) * pos.quantity;
-                  const pnlPct   = pos.avgCost > 0 && pos.assetClass !== 'Cash' ? ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
-                  const allocPct = totalValue > 0 ? (val / totalValue) * 100 : 0;
-                  const acMeta   = ASSET_CLASSES.find(a => a.id === pos.assetClass) || ASSET_CLASSES[0];
-                  return (
-                    <tr key={pos.id} onDoubleClick={() => setEditPos(pos)} style={{ cursor: 'default' }}>
-                      <td style={S.td}>
-                        <div style={{ fontWeight: 700, color: C.textPrimary }}>{acMeta.icon} {pos.ticker}</div>
-                        {pos.name && <div style={{ fontSize: 10, color: C.textSec }}>{pos.name}</div>}
-                        {pos.sector && <div style={{ fontSize: 10, color: C.textMuted }}>{pos.sector}</div>}
-                        {pos.status && pos.status !== 'Open' && (
-                          <div style={{ fontSize: 9, color: pos.status === 'Closed' ? C.red : C.gold, fontWeight: 700 }}>{pos.status}</div>
-                        )}
-                      </td>
-                      <td style={S.td}>
-                        <span style={S.tag(getAssetClassColor(pos.assetClass))}>{pos.assetClass}</span>
-                      </td>
-                      <td style={{ ...S.td, fontWeight: 700, color: C.gold }}>{fmt$(val, 0)}</td>
-                      <td style={{ ...S.td, ...(pnl >= 0 ? S.pnlPos : S.pnlNeg) }}>
-                        {pos.assetClass === 'Cash' ? '—' : (pnl >= 0 ? '+' : '') + fmt$(pnl, 0)}
-                        {pnlPct !== 0 && <div style={{ fontSize: 10 }}>{fmtPct(pnlPct)}</div>}
-                      </td>
-                      <td style={S.td}>{allocPct.toFixed(1)}%</td>
-                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
-                        {pos.assetClass === 'Cash' ? fmt$(pos.quantity, 0) : `${pos.quantity} ${acMeta.qtyUnit}`}
-                      </td>
-                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
-                        {pos.assetClass === 'Cash' ? '—' : fmt$(pos.avgCost)}
-                      </td>
-                      <td style={{ ...S.td, fontSize: 12, color: C.textSec }}>
-                        {pos.assetClass === 'Cash' ? '—' : fmt$(pos.currentPrice)}
-                      </td>
-                      <td style={S.td}>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {(pos.status || 'Open') !== 'Closed' && (
-                            <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11, minHeight: 32, color: C.red, borderColor: 'rgba(196,85,85,0.3)' }} onClick={() => setSellPos(pos)}>
-                              Sell
-                            </button>
-                          )}
-                          <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11, minHeight: 32 }} onClick={() => setEditPos(pos)}>Edit</button>
-                          <button style={{ ...S.btnDanger, minHeight: 32 }} onClick={() => handleDelete(pos.id)}>&#10005;</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: C.textSec, fontSize: 11 }}>TOTAL ({positions.length})</td>
-                  <td style={{ ...S.td, fontWeight: 700, color: C.gold }}>{fmt$(totalValue, 0)}</td>
-                  <td style={{ ...S.td, ...(totalPnl >= 0 ? S.pnlPos : S.pnlNeg) }}>
-                    {totalPnl >= 0 ? '+' : ''}{fmt$(totalPnl, 0)}
-                    <div style={{ fontSize: 10 }}>{totalCost > 0 ? fmtPct((totalPnl / totalCost) * 100) : '–'}</div>
-                  </td>
-                  <td colSpan={6} style={S.td}></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div style={{ marginTop: 8, fontSize: 10, color: C.textMuted }}>Double-click a row to edit</div>
-        </div>
-      ) : null}
+      )}
 
       {(showAdd || editPos) && (
         <AddPositionModal
@@ -1866,6 +1663,105 @@ function PortfolioTab({ positions, setPositions, targets, setTargets, transactio
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Custom Positions Panel ───────────────────────────────────────────────────
+// Off-model user-defined positions plus their trade history. Only mounts when
+// the user has manually added positions (or explicitly opens the section).
+function CustomPositionsPanel({ positions, transactions, onEdit, onSell, onDelete, onClearTransactions, isMobile }) {
+  const totals = useMemo(() => {
+    const open = positions.filter(p => (p.status || 'Open') !== 'Closed').map(migratePosition);
+    const totalValue = open.reduce((s, p) => s + p.quantity * p.currentPrice, 0);
+    const totalCost  = open.reduce((s, p) => s + p.quantity * p.avgCost, 0);
+    return { open, totalValue, totalCost, totalPnl: totalValue - totalCost };
+  }, [positions]);
+
+  const realizedPnl = useMemo(() => transactions.reduce((s, t) => s + (t.realizedPnl || 0), 0), [transactions]);
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{ ...S.sectionLabel, marginTop: 0, color: C.textSec }}>Custom (off-model) positions</div>
+      {totals.open.length === 0 ? (
+        <div style={{ ...S.card, fontSize: 12, color: C.textMuted }}>No custom positions yet.</div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontFamily: MONO, fontSize: 11, color: C.textSec }}>
+              {fmt$(totals.totalValue, 0)} · Unrealized:{' '}
+              <span style={{ color: totals.totalPnl >= 0 ? C.green : C.red, fontWeight: 700 }}>{fmt$(totals.totalPnl, 0)}</span>
+              {realizedPnl !== 0 && (
+                <> · Realized: <span style={{ color: realizedPnl >= 0 ? C.green : C.red, fontWeight: 700 }}>{fmt$(realizedPnl, 0)}</span></>
+              )}
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ ...S.table, minWidth: 560 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
+                  <th style={{ ...S.th, cursor: 'default' }}>Class</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Qty</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Price</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Value</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>P&amp;L</th>
+                  <th style={{ ...S.th, cursor: 'default' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {totals.open.map(pos => {
+                  const val = pos.quantity * pos.currentPrice;
+                  const pnl = pos.assetClass === 'Cash' ? 0 : (pos.currentPrice - pos.avgCost) * pos.quantity;
+                  const acMeta = ASSET_CLASSES.find(a => a.id === pos.assetClass) || ASSET_CLASSES[0];
+                  return (
+                    <tr key={pos.id} onDoubleClick={() => onEdit(pos)}>
+                      <td style={S.td}>
+                        <div style={{ fontWeight: 700, color: C.textPrimary }}>{acMeta.icon} {pos.ticker}</div>
+                        {pos.name && <div style={{ fontSize: 10, color: C.textSec }}>{pos.name}</div>}
+                      </td>
+                      <td style={S.td}>
+                        <span style={S.tag(getAssetClassColor(pos.assetClass))}>{pos.assetClass}</span>
+                      </td>
+                      <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                        {pos.assetClass === 'Cash' ? fmt$(pos.quantity, 0) : `${pos.quantity}`}
+                      </td>
+                      <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                        {pos.assetClass === 'Cash' ? '—' : fmt$(pos.currentPrice)}
+                      </td>
+                      <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
+                        {fmt$(val, 0)}
+                      </td>
+                      <td style={{ ...S.td, textAlign: 'right', ...(pnl >= 0 ? S.pnlPos : S.pnlNeg), fontVariantNumeric: 'tabular-nums' }}>
+                        {pos.assetClass === 'Cash' ? '—' : (pnl >= 0 ? '+' : '') + fmt$(pnl, 0)}
+                      </td>
+                      <td style={S.td}>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {(pos.status || 'Open') !== 'Closed' && (
+                            <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11, minHeight: 32, color: C.red, borderColor: 'rgba(196,85,85,0.3)' }} onClick={() => onSell(pos)}>Sell</button>
+                          )}
+                          <button style={{ ...S.btnGhost, padding: '3px 8px', fontSize: 11, minHeight: 32 }} onClick={() => onEdit(pos)}>Edit</button>
+                          <button style={{ ...S.btnDanger, minHeight: 32 }} onClick={() => onDelete(pos.id)}>&#10005;</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 10, color: C.textMuted }}>Double-click a row to edit</div>
+        </div>
+      )}
+
+      {transactions.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <TradeHistoryPanel transactions={transactions} onClear={onClearTransactions} />
+        </div>
+      )}
+
+      {/* keep linter happy on unused isMobile */}
+      <div style={{ display: 'none' }}>{isMobile ? '' : ''}</div>
     </div>
   );
 }
@@ -2559,6 +2455,7 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
   const [editSnapshot, setEditSnapshot] = useState(null);
   const [showMilestone, setShowMilestone] = useState(false);
   const [editMilestone, setEditMilestone] = useState(null);
+  const model = useModelPortfolio();
 
   const chartData = useMemo(() => {
     return [...snapshots]
@@ -2576,6 +2473,13 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
   const prevTotal   = prev   ? prev.total   : 0;
   const momChange   = latestTotal - prevTotal;
   const momPct      = prevTotal > 0 ? (momChange / prevTotal) * 100 : 0;
+
+  // Live model portfolio plugged into net worth via the same shared hook —
+  // single source of truth with the Dashboard headline / Portfolio tab.
+  const livePortfolio    = model.totalValue;
+  const livePortfolioDay = model.dayChange;
+  const livePortfolioPct = model.dayChangePct;
+  const combinedNetWorth = latestTotal + livePortfolio;
 
   const fmtMonth = (m) => {
     if (!m) return '';
@@ -2631,7 +2535,21 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
 
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiCard label="Current Net Worth"   value={fmt$(latestTotal, 0)} accent="#d4a843" />
+        <KpiCard
+          label="Live Portfolio"
+          value={livePortfolio > 0 ? fmt$(livePortfolio, 0) : '—'}
+          sub={model.totalBaseline > 0
+            ? (livePortfolioDay >= 0 ? '▲ +' : '▼ ') + Math.abs(livePortfolioPct).toFixed(2) + '% today'
+            : 'Loading prices…'}
+          subColor={model.totalBaseline > 0 ? (livePortfolioDay >= 0 ? C.green : C.red) : C.textMuted}
+          accent="#d4a843"
+        />
+        <KpiCard
+          label="Combined Net Worth"
+          value={fmt$(combinedNetWorth, 0)}
+          sub={latest ? `Snapshot ${fmtMonth(latest.month)} + live portfolio` : 'Live portfolio only — add a snapshot for a full picture'}
+          accent="#5ab87a"
+        />
         <KpiCard label="MoM Change"          value={fmt$(momChange, 0)} sub={fmtPct(momPct)} subColor={momChange >= 0 ? '#5ab87a' : '#c45555'} accent={momChange >= 0 ? '#5ab87a' : '#c45555'} />
         <KpiCard label="Snapshots on File"   value={String(snapshots.length)} sub={latest ? `Latest: ${fmtMonth(latest.month)}` : 'None yet'} accent="#6366f1" />
         <KpiCard label="Milestones"          value={String(milestones.length)} sub={`${milestones.filter(m => m.netWorth <= latestTotal).length} achieved`} accent="#8b5cf6" />

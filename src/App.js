@@ -152,6 +152,29 @@ const SNAPSHOT_TICKERS = [
 const PIN_HASH = '41c991eb6a66242c0454191244278183ce58cf4a6bcd372f799e4b9cc01886af';
 const SESSION_KEY = 'mag_auth';
 
+// All tabs in the app. The mobile bottom nav strip renders this whole list
+// (no "More" overflow) so every tab is one tap away on phones.
+const TAB_DEFS = [
+  { id: 'dashboard', label: 'Dashboard'  },
+  { id: 'markets',   label: 'Markets'    },
+  { id: 'portfolio', label: 'Portfolio'  },
+  { id: 'spending',  label: 'Spending'   },
+  { id: 'networth',  label: 'Net Worth'  },
+  { id: 'tithe',     label: 'Tithe'      },
+  { id: 'roadmap',   label: 'Roadmap'    },
+  { id: 'scanner',   label: 'AI Scanner' },
+];
+const MOBILE_TAB_META = {
+  dashboard: { icon: '🏠', short: 'Home'      },
+  markets:   { icon: '📈', short: 'Markets'   },
+  portfolio: { icon: '📊', short: 'Portfolio' },
+  spending:  { icon: '💸', short: 'Spending'  },
+  networth:  { icon: '🪙', short: 'Net Worth' },
+  tithe:     { icon: '🙏', short: 'Tithe'     },
+  roadmap:   { icon: '🗺️', short: 'Roadmap'   },
+  scanner:   { icon: '🔍', short: 'Scanner'   },
+};
+
 async function hashPin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -189,7 +212,7 @@ const S = {
   app: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     background: C.bgPrimary,
-    minHeight: '100vh',
+    minHeight: '100dvh',
     color: C.textPrimary,
   },
   header: {
@@ -249,13 +272,15 @@ const S = {
     marginBottom: 12,
   },
   bigNum: {
-    fontFamily: SERIF,
-    fontSize: 26,
+    fontFamily: MONO,
+    fontSize: 'clamp(20px, 5vw, 26px)',
     fontWeight: 700,
     color: C.textPrimary,
-    lineHeight: 1.1,
+    lineHeight: 1.15,
+    fontVariantNumeric: 'tabular-nums',
+    wordBreak: 'keep-all',
   },
-  bigNumSub: { fontFamily: MONO, fontSize: 11, color: C.textSec, marginTop: 3 },
+  bigNumSub: { fontFamily: MONO, fontSize: 'clamp(10px, 2.4vw, 11px)', color: C.textSec, marginTop: 3, lineHeight: 1.3 },
   sectionLabel: {
     fontFamily: MONO,
     fontSize: 10,
@@ -418,6 +443,12 @@ const fmt$ = (n, dec = 2) => {
   const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
   return (n < 0 ? '-$' : '$') + s;
 };
+const fmtFullUSD = (n) => n == null ? '–' :
+  (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtShares = (n) => n == null ? '—' :
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 4 : 2 });
+const fmtPrice = (n) => (n == null || !(n > 0)) ? '—' :
+  '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (n, dec = 1) => n == null ? '–' : (n >= 0 ? '+' : '') + Number(n).toFixed(dec) + '%';
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 const CURRENT_MONTH = TODAY_STR.slice(0, 7);
@@ -678,7 +709,6 @@ function PinLock({ onUnlock }) {
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
   const [tab,      setTab]      = useState('dashboard');
-  const [menuOpen, setMenuOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const [positions,      setPositions]      = useLocalStorage('mag_positions',       []);
@@ -695,7 +725,9 @@ export default function App() {
   });
   const [priceLoading,   setPriceLoading]    = useState(false);
 
-  const { totalValue } = useMemo(() => portfolioStats(positions), [positions]);
+  // user.positions math is no longer surfaced at App level — every dashboard
+  // surface reads off useModelPortfolio's live model. Kept positions state for
+  // CustomPositionsPanel and the AddPosition flow inside PortfolioTab.
 
   const fetchAndUpdatePrices = useCallback(async (force = false) => {
     const CACHE_MS = 5 * 60 * 1000;
@@ -740,18 +772,9 @@ export default function App() {
     finally { setPriceLoading(false); }
   }, [positions, priceTs, priceCache, setPriceCache, setPositions]);
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard'  },
-    { id: 'markets',   label: 'Markets'    },
-    { id: 'portfolio', label: 'Portfolio'  },
-    { id: 'spending',  label: 'Spending'   },
-    { id: 'networth',  label: 'Net Worth'  },
-    { id: 'tithe',     label: 'Tithe'      },
-    { id: 'roadmap',   label: 'Roadmap'    },
-    { id: 'scanner',   label: 'AI Scanner' },
-  ];
+  const tabs = TAB_DEFS;
 
-  const switchTab = useCallback((id) => { setTab(id); setMenuOpen(false); }, []);
+  const switchTab = useCallback((id) => { setTab(id); }, []);
 
   if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />;
 
@@ -766,6 +789,15 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: #2a4a3a; border-radius: 3px; }
         option { background: #132b21; color: #e8e4d8; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        /* Bottom nav strip on mobile — horizontal-scroll, no visible scrollbar. */
+        .mag-bottom-nav::-webkit-scrollbar { display: none; height: 0; width: 0; }
+        .mag-bottom-nav { -ms-overflow-style: none; }
+        /* Mobile accessibility: every interactive element gets a 44px tap
+           target. Desktop styles win above 768px. */
+        @media (max-width: 767px) {
+          button, [role="button"] { min-height: 44px; }
+          input, select, textarea { min-height: 44px; }
+        }
       `}</style>
 
       <header style={{ ...S.header, height: isMobile ? 52 : 58 }}>
@@ -780,76 +812,54 @@ export default function App() {
           )}
         </div>
 
-          <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
-            {tabs.map(t => (
-              <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => switchTab(t.id)}>{t.label}</button>
-            ))}
-          </nav>
+          {!isMobile && (
+            <nav style={{ ...S.nav, flexWrap: 'wrap' }}>
+              {tabs.map(t => (
+                <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => switchTab(t.id)}>{t.label}</button>
+              ))}
+            </nav>
+          )}
       </header>
 
-      {/* Mobile bottom sheet "More" menu */}
-      {menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }} onClick={() => setMenuOpen(false)}>
-          <div style={{ background: C.bgCard, borderTop: `2px solid ${C.gold}`, borderRadius: '16px 16px 0 0', padding: '20px 20px 40px' }} onClick={e => e.stopPropagation()}>
-            <div style={{ width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 20px' }} />
-            <div style={{ fontFamily: MONO, fontSize: 9, color: C.textMuted, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 12 }}>More sections</div>
-            {[
-              { id: 'networth', icon: '📈', label: 'Net Worth' },
-              { id: 'tithe',    icon: '🙏', label: 'Tithe & Giving' },
-              { id: 'roadmap',  icon: '🗺️', label: 'Roadmap' },
-              { id: 'scanner',  icon: '🔍', label: 'AI Scanner' },
-            ].map(t => (
-              <button key={t.id} onClick={() => switchTab(t.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 14, width: '100%',
-                padding: '14px 0', background: 'none', border: 'none',
-                borderBottom: `1px solid ${C.border}`,
-                color: tab === t.id ? C.gold : C.textSec,
-                fontFamily: MONO, fontWeight: tab === t.id ? 700 : 400,
-                fontSize: 15, cursor: 'pointer', textAlign: 'left',
-              }}>
-                <span style={{ fontSize: 20 }}>{t.icon}</span>
-                {t.label}
-                {tab === t.id && <span style={{ marginLeft: 'auto', color: C.gold }}>●</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mobile bottom nav bar */}
+      {/* Mobile bottom nav — covers ALL 8 tabs in a horizontally-scrollable
+          strip. 60px-wide tabs, ≥56px tap targets, current tab visually
+          marked + auto-scrolled into view (browser handles via :focus). */}
       {isMobile && (
         <nav style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
           background: C.bgPrimary, borderTop: `1px solid ${C.gold}`,
-          display: 'flex', alignItems: 'stretch',
+          paddingBottom: 'env(safe-area-inset-bottom, 0)',
         }}>
-          {[
-            { id: 'dashboard', icon: '🏠', label: 'Home' },
-            { id: 'markets',   icon: '📈', label: 'Markets' },
-            { id: 'portfolio', icon: '📊', label: 'Portfolio' },
-            { id: 'spending',  icon: '💸', label: 'Spending' },
-          ].map(t => (
-            <button key={t.id} onClick={() => switchTab(t.id)} style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              padding: '8px 4px', gap: 3, minHeight: 56,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: tab === t.id ? C.gold : C.textMuted,
-              borderTop: tab === t.id ? `2px solid ${C.gold}` : '2px solid transparent',
-            }}>
-              <span style={{ fontSize: 20 }}>{t.icon}</span>
-              <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: tab === t.id ? 700 : 400, letterSpacing: '0.5px' }}>{t.label}</span>
-            </button>
-          ))}
-          <button onClick={() => setMenuOpen(m => !m)} style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: '8px 4px', gap: 3, minHeight: 56,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: ['networth','tithe','roadmap','scanner'].includes(tab) ? C.gold : C.textMuted,
-            borderTop: ['networth','tithe','roadmap','scanner'].includes(tab) ? `2px solid ${C.gold}` : '2px solid transparent',
+          <div className="mag-bottom-nav" style={{
+            display: 'flex',
+            alignItems: 'stretch',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
           }}>
-            <span style={{ fontSize: 20 }}>⋯</span>
-            <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.5px' }}>More</span>
-          </button>
+            {tabs.map(t => {
+              const meta = MOBILE_TAB_META[t.id] || { icon: '•', short: t.label };
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => switchTab(t.id)}
+                  style={{
+                    flex: '0 0 auto',
+                    minWidth: 64,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: '8px 8px', gap: 3, minHeight: 56,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: active ? C.gold : C.textMuted,
+                    borderTop: active ? `2px solid ${C.gold}` : '2px solid transparent',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>{meta.icon}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: active ? 700 : 400, letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>{meta.short}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
       )}
 
@@ -886,7 +896,7 @@ export default function App() {
           />
         )}
         {tab === 'tithe'    && <TitheTab   givingEntries={givingEntries} setGivingEntries={setGivingEntries} />}
-        {tab === 'roadmap'  && <RoadmapTab roadmapSavings={roadmapSavings} setRoadmapSavings={setRoadmapSavings} portfolioValue={totalValue} />}
+        {tab === 'roadmap'  && <RoadmapTab roadmapSavings={roadmapSavings} setRoadmapSavings={setRoadmapSavings} />}
         {tab === 'scanner'  && <ScannerTab />}
       </main>
 
@@ -914,56 +924,89 @@ export default function App() {
   );
 }
 
+// ─── Live Portfolio Strip ──────────────────────────────────────────────────────
+// Compact live-portfolio context strip used at the top of Spending, Tithe,
+// Roadmap, and other secondary tabs. Same shared hook → ticks live with
+// every other portfolio surface.
+function LivePortfolioStrip({ label = 'Live Portfolio' }) {
+  const { totalValue, totalBaseline, dayChange, dayChangePct } = useModelPortfolio();
+  const upDay = dayChange >= 0;
+  return (
+    <div style={{ ...S.card, marginBottom: 16, padding: 'clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px)', borderTop: `2px solid ${C.gold}` }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={S.cardTitle}>{label}</div>
+          <div style={{ fontFamily: MONO, fontSize: 'clamp(18px, 4.6vw, 24px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            {totalValue > 0 ? fmtFullUSD(totalValue) : '—'}
+          </div>
+        </div>
+        {totalBaseline > 0 && (
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={S.cardTitle}>Day</div>
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 700, color: upDay ? C.green : C.red, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {(upDay ? '+' : '') + fmtFullUSD(dayChange)}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, fontVariantNumeric: 'tabular-nums' }}>
+              {(upDay ? '+' : '') + dayChangePct.toFixed(2)}%
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Landing Portfolio Card ────────────────────────────────────────────────────
 // Live-priced model portfolio shown as the headline of the post-PIN landing view.
 // Shares are frozen at first live-price fetch (per session) so total moves naturally
 // with the market. Reads/writes shared market-overview cache (mag_market_prices) so
 // it doesn't add a second polling loop.
 function LandingPortfolioCard() {
-  const isMobile = useIsMobile();
   const model = useModelPortfolio();
   const { buckets, totalValue, totalBaseline, dayChange, dayChangePct, allFrozen, lastTs, loading, refresh } = model;
   const upDay   = dayChange >= 0;
   const minAgo  = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
 
-  const fmtFull = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
 
   return (
-    <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: isMobile ? '16px 16px' : '22px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: isMobile ? 16 : 20 }}>
+    <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: 'clamp(14px, 4vw, 22px) clamp(14px, 4vw, 24px)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={S.cardTitle}>Portfolio</div>
           <div style={{
             fontFamily: MONO,
-            fontSize: isMobile ? 26 : 38,
+            fontSize: 'clamp(22px, 7vw, 38px)',
             fontWeight: 700,
             color: C.textPrimary,
             letterSpacing: '0.5px',
             lineHeight: 1.1,
             fontVariantNumeric: 'tabular-nums',
+            wordBreak: 'keep-all',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}>
-            {totalValue > 0 ? fmtFull(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+            {totalValue > 0 ? fmtFullUSD(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
           </div>
           <div style={{
             fontFamily: MONO,
-            fontSize: isMobile ? 12 : 14,
+            fontSize: 'clamp(11px, 2.6vw, 14px)',
             fontWeight: 700,
             color: totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
             marginTop: 6,
             fontVariantNumeric: 'tabular-nums',
+            display: 'flex', flexWrap: 'wrap', columnGap: 6, rowGap: 2,
           }}>
             {totalBaseline > 0 ? (
               <>
-                {upDay ? '▲ +' : '▼ '}
-                {fmtShort(Math.abs(dayChange))}
-                {' '}
-                ({upDay ? '+' : ''}{dayChangePct.toFixed(2)}%) today
+                <span>{upDay ? '▲ +' : '▼ '}{fmtShort(Math.abs(dayChange))}</span>
+                <span>({upDay ? '+' : ''}{dayChangePct.toFixed(2)}%) today</span>
               </>
             ) : 'Loading prices…'}
           </div>
           {totalBaseline > 0 && !allFrozen && (
-            <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold, marginTop: 4 }}>
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(9px, 2vw, 10px)', color: C.gold, marginTop: 4, lineHeight: 1.4 }}>
               Some prices still loading — total fills in as they arrive
             </div>
           )}
@@ -975,7 +1018,7 @@ function LandingPortfolioCard() {
             </span>
           )}
           <button
-            style={{ ...S.btnGhost, padding: '5px 12px', fontSize: 11, minHeight: 30 }}
+            style={{ ...S.btnGhost, padding: '8px 14px', fontSize: 11, minHeight: 44 }}
             onClick={refresh}
             disabled={loading}
           >
@@ -984,43 +1027,40 @@ function LandingPortfolioCard() {
         </div>
       </div>
 
-      <div style={{
+      <div className="mag-bucket-grid" style={{
         display: 'grid',
-        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-        gap: isMobile ? 8 : 12,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: 10,
       }}>
-        {buckets.map(b => {
-          const pct = totalValue > 0 ? (b.value / totalValue) * 100 : 0;
-          return (
-            <div key={b.id} style={{
-              background: C.bgInput,
-              borderRadius: 6,
-              padding: isMobile ? '10px 12px' : '12px 14px',
-              borderLeft: `3px solid ${b.color}`,
+        {buckets.map(b => (
+          <div key={b.id} style={{
+            background: C.bgInput,
+            borderRadius: 6,
+            padding: '12px 14px',
+            borderLeft: `3px solid ${b.color}`,
+          }}>
+            <div style={{
+              fontFamily: MONO, fontSize: 9, fontWeight: 700,
+              color: b.color, letterSpacing: '0.8px',
+              textTransform: 'uppercase', marginBottom: 6,
             }}>
-              <div style={{
-                fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                color: b.color, letterSpacing: '0.8px',
-                textTransform: 'uppercase', marginBottom: 6,
-              }}>
-                {b.label}
-              </div>
-              <div style={{
-                fontFamily: MONO,
-                fontSize: isMobile ? 14 : 17,
-                fontWeight: 700,
-                color: C.textPrimary,
-                marginBottom: 3,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {b.value > 0 ? fmtShort(b.value) : '—'}
-              </div>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-                {totalValue > 0 ? `${pct.toFixed(2)}% of portfolio` : 'Loading…'}
-              </div>
+              {b.label}
             </div>
-          );
-        })}
+            <div style={{
+              fontFamily: MONO,
+              fontSize: 'clamp(14px, 3.5vw, 18px)',
+              fontWeight: 700,
+              color: C.textPrimary,
+              marginBottom: 3,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {b.value > 0 ? fmtShort(b.value) : '—'}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+              {totalValue > 0 ? `${b.pctOfPortfolio.toFixed(2)}% of portfolio` : 'Loading…'}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1237,7 +1277,12 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
       </div>
 
       {/* ── KPI row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+        gap: 12,
+        marginBottom: 20,
+      }}>
         <KpiCard
           label="Your Portfolio"
           value={portfolioTotal > 0 ? fmt$(portfolioTotal, 0) : '—'}
@@ -1462,10 +1507,6 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
   };
   const handleDelete = (id) => { if (window.confirm('Delete this position?')) setPositions(p => p.filter(x => x.id !== id)); };
 
-  const fmtFull   = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtShares = (n) => n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 4 : 2 });
-  const fmtPrice  = (n) => n == null || !(n > 0) ? '—' : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   const minAgo = model.lastTs ? Math.round((Date.now() - model.lastTs) / 60000) : null;
   const upDay  = model.dayChange >= 0;
   const totalValue = model.totalValue;
@@ -1494,30 +1535,31 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
       </div>
 
       {/* ── Summary row (Dashboard headline styling) ──────────────────── */}
-      <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: isMobile ? '14px 16px' : '20px 24px' }}>
+      <div style={{ ...S.card, marginBottom: 24, borderTop: `2px solid ${C.gold}`, padding: 'clamp(14px, 4vw, 22px)' }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: isMobile ? 14 : 22,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+          gap: 'clamp(12px, 3vw, 22px)',
         }}>
           <div>
             <div style={S.cardTitle}>Total Portfolio Value</div>
-            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-              {totalValue > 0 ? fmtFull(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, wordBreak: 'keep-all' }}>
+              {totalValue > 0 ? fmtFullUSD(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
             </div>
           </div>
           <div>
             <div style={S.cardTitle}>Day Change</div>
             <div style={{
               fontFamily: MONO,
-              fontSize: isMobile ? 20 : 28,
+              fontSize: 'clamp(20px, 5.5vw, 28px)',
               fontWeight: 700,
               color: model.totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
               fontVariantNumeric: 'tabular-nums',
               lineHeight: 1.1,
+              wordBreak: 'keep-all',
             }}>
               {model.totalBaseline > 0
-                ? (upDay ? '+' : '') + fmtFull(model.dayChange)
+                ? (upDay ? '+' : '') + fmtFullUSD(model.dayChange)
                 : '—'}
             </div>
             {model.totalBaseline > 0 && (
@@ -1528,13 +1570,13 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
           </div>
           <div>
             <div style={S.cardTitle}># of Positions</div>
-            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
               {model.positionCount}
             </div>
           </div>
           <div>
             <div style={S.cardTitle}># of Buckets</div>
-            <div style={{ fontFamily: MONO, fontSize: isMobile ? 20 : 28, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
               {model.bucketCount}
             </div>
           </div>
@@ -1542,70 +1584,9 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
       </div>
 
       {/* ── Bucket sections ───────────────────────────────────────────── */}
-      {orderedBuckets.map(bucket => {
-        const bucketPctOfPortfolio = totalValue > 0 ? (bucket.value / totalValue) * 100 : 0;
-        return (
-          <div key={bucket.id} style={{ ...S.card, marginBottom: 18, borderTop: `2px solid ${bucket.color}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color }} />
-                <div style={{ fontFamily: SERIF, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
-                  {bucket.label}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 700, color: C.gold }}>
-                  {bucket.value > 0 ? fmtFull(bucket.value) : '—'}
-                </span>
-                <span style={{ fontSize: 11, color: C.textMuted }}>
-                  {totalValue > 0 ? `${bucketPctOfPortfolio.toFixed(2)}% of portfolio` : ''}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ ...S.table, minWidth: 560 }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
-                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Shares</th>
-                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Live Price</th>
-                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Position Value</th>
-                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Bucket</th>
-                    <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bucket.holdings.map(h => {
-                    const pctOfBucket = bucket.value > 0 ? (h.value / bucket.value) * 100 : 0;
-                    const pctOfTotal  = totalValue   > 0 ? (h.value / totalValue)   * 100 : 0;
-                    return (
-                      <tr key={h.ticker}>
-                        <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>{h.ticker}</td>
-                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
-                          {fmtShares(h.shares)}
-                        </td>
-                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
-                          {fmtPrice(h.livePrice)}
-                        </td>
-                        <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
-                          {h.value > 0 ? fmtFull(h.value) : '—'}
-                        </td>
-                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
-                          {bucket.value > 0 && h.value > 0 ? pctOfBucket.toFixed(2) + '%' : '—'}
-                        </td>
-                        <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
-                          {totalValue > 0 && h.value > 0 ? pctOfTotal.toFixed(2) + '%' : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
+      {orderedBuckets.map(bucket => (
+        <BucketSection key={bucket.id} bucket={bucket} totalValue={totalValue} isMobile={isMobile} />
+      ))}
 
       {/* ── Custom user positions (preserved when present) ────────────── */}
       {(positions.length > 0 || showCustom) && (
@@ -1662,6 +1643,130 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
             setSellPos(null);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Bucket Section (Portfolio tab) ───────────────────────────────────────────
+// Renders a bucket header + every individual holding. Desktop shows a 6-column
+// table; mobile collapses each holding to a stacked card (ticker + value on
+// top, shares · price · % bucket · % total on a second line). Tap a row on
+// mobile to expand for full detail.
+function BucketSection({ bucket, totalValue, isMobile }) {
+  const [expanded, setExpanded] = useState(null); // ticker key when expanded
+
+  return (
+    <div style={{ ...S.card, marginBottom: 18, borderTop: `2px solid ${bucket.color}`, padding: 'clamp(14px, 4vw, 20px)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
+          <div style={{ fontFamily: SERIF, fontSize: 'clamp(15px, 4vw, 17px)', fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
+            {bucket.label}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'clamp(14px, 3.6vw, 16px)', fontWeight: 700, color: C.gold }}>
+            {bucket.value > 0 ? fmtFullUSD(bucket.value) : '—'}
+          </span>
+          <span style={{ fontSize: 11, color: C.textMuted }}>
+            {totalValue > 0 ? `${bucket.pctOfPortfolio.toFixed(2)}% of portfolio` : ''}
+          </span>
+        </div>
+      </div>
+
+      {isMobile ? (
+        // Mobile: stacked rows
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {bucket.holdings.map(h => {
+            const isOpen = expanded === h.ticker;
+            return (
+              <div
+                key={h.ticker}
+                onClick={() => setExpanded(isOpen ? null : h.ticker)}
+                style={{
+                  background: C.bgInput,
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  borderLeft: `2px solid ${bucket.color}55`,
+                  cursor: 'pointer',
+                  minHeight: 56,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
+                    {h.ticker}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 'clamp(14px, 3.8vw, 16px)', fontWeight: 700, color: h.value > 0 ? C.gold : C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                    {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                  <span>{fmtShares(h.shares)} sh</span>
+                  <span>·</span>
+                  <span>{fmtPrice(h.livePrice)}</span>
+                  <span>·</span>
+                  <span>{bucket.value > 0 && h.value > 0 ? `${h.pctOfBucket.toFixed(2)}% bkt` : '— bkt'}</span>
+                  <span>·</span>
+                  <span>{totalValue > 0 && h.value > 0 ? `${h.pctOfPortfolio.toFixed(2)}% tot` : '— tot'}</span>
+                </div>
+                {isOpen && h.shares != null && h.livePrice > 0 && (
+                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.bgPrimary}`, fontFamily: MONO, fontSize: 11, color: C.textSec, fontVariantNumeric: 'tabular-nums', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                    <span>Target wt: {h.targetPct}%</span>
+                    <span>Baseline: {fmtPrice(h.baselinePrice)}</span>
+                    <span style={{ color: h.dayChange >= 0 ? C.green : C.red }}>
+                      Day: {h.dayChange >= 0 ? '+' : ''}{fmtFullUSD(h.dayChange)}
+                    </span>
+                    <span style={{ color: h.dayChange >= 0 ? C.green : C.red }}>
+                      {h.dayChange >= 0 ? '+' : ''}{h.dayChangePct.toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Desktop: 6-column table
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ ...S.table, minWidth: 560 }}>
+            <thead>
+              <tr>
+                <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
+                <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Shares</th>
+                <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Live Price</th>
+                <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Position Value</th>
+                <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Bucket</th>
+                <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bucket.holdings.map(h => (
+                <tr key={h.ticker}>
+                  <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>{h.ticker}</td>
+                  <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtShares(h.shares)}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtPrice(h.livePrice)}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
+                    {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                    {bucket.value > 0 && h.value > 0 ? h.pctOfBucket.toFixed(2) + '%' : '—'}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                    {totalValue > 0 && h.value > 0 ? h.pctOfPortfolio.toFixed(2) + '%' : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -2241,6 +2346,7 @@ function SpendingTab({ expenses, setExpenses }) {
 
   return (
     <div>
+      <LivePortfolioStrip label="Live Portfolio" />
       <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 16, gap: 10 }}>
         <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Spending Tracker</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
@@ -2854,10 +2960,15 @@ function ProgressRing({ pct, size = 80, stroke = 8, color = '#c9a84c', children 
 function TitheTab({ givingEntries, setGivingEntries }) {
   const [showAdd,   setShowAdd]   = useState(false);
   const [viewYear,  setViewYear]  = useState(String(new Date().getFullYear()));
+  const model = useModelPortfolio();
 
   const currentYear  = String(new Date().getFullYear());
   const currentMonth = new Date().getMonth(); // 0-based
   const monthlyTarget = Math.round(MONTHLY_GROSS * TITHE_RATE);
+
+  // Tithe-on-gains: when the portfolio is up today, suggest 10% of today's
+  // gain as an additional gift. Reads live day-change off the singleton.
+  const tithableGain = model.dayChange > 0 ? model.dayChange * TITHE_RATE : 0;
 
   const ytdEntries = useMemo(() =>
     givingEntries.filter(e => e.date.startsWith(viewYear)),
@@ -2897,6 +3008,15 @@ function TitheTab({ givingEntries, setGivingEntries }) {
 
   return (
     <div>
+      <LivePortfolioStrip label="Live Portfolio" />
+      {tithableGain > 0 && (
+        <div style={{ ...S.card, marginBottom: 16, padding: '10px 14px', borderLeft: `3px solid ${C.green}` }}>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textSec, lineHeight: 1.5 }}>
+            Portfolio gained <strong style={{ color: C.green, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{fmtFullUSD(model.dayChange)}</strong> today —
+            tithe-on-gains suggestion: <strong style={{ color: C.gold, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{fmtFullUSD(tithableGain)}</strong>.
+          </div>
+        </div>
+      )}
       {/* Plain language intro with progress ring */}
       <div style={{ ...S.card, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
         <ProgressRing pct={monthThisPct} size={80} color={C.gold}>
@@ -3072,12 +3192,16 @@ function AddGivingModal({ onSave, onClose }) {
 }
 
 // ─── Asset Acquisition Roadmap Tab ─────────────────────────────────────────────
-function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
+function RoadmapTab({ roadmapSavings, setRoadmapSavings }) {
   const [editingId, setEditingId] = useState(null);
   const [editSaved, setEditSaved] = useState('');
   const [editRate,  setEditRate]  = useState('');
+  const model = useModelPortfolio();
 
-  const ltvPower = portfolioValue * 0.4;
+  // Live portfolio drives LTV — updates as prices tick, milestone progress
+  // ("94% to first rental property") recalculates without any tab-local state.
+  const portfolioValue = model.totalValue;
+  const ltvPower = portfolioValue * BORROWING_LTV_PCT;
 
   const startEdit = (id) => {
     const data = roadmapSavings[id] || {};
@@ -3101,8 +3225,9 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings, portfolioValue }) {
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: '#e8e4d8', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
-      <div style={{ fontSize: 12, color: '#6a6a58', marginBottom: 20 }}>Funded via 40% LTV portfolio loans</div>
+      <LivePortfolioStrip label="Live Portfolio" />
+      <div style={{ fontSize: 'clamp(18px, 4.6vw, 22px)', fontWeight: 700, color: '#e8e4d8', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
+      <div style={{ fontSize: 12, color: '#6a6a58', marginBottom: 20 }}>Funded via 40% LTV portfolio loans · live</div>
 
       {/* LTV summary card */}
       <div style={{ ...S.card, marginBottom: 20 }}>
@@ -3715,46 +3840,64 @@ function ScannerTab() {
 }
 
 // ─── Markets Tab ───────────────────────────────────────────────────────────────
-function TickerRow({ ticker, priceData, isRateLimited, sectionLoading }) {
+function TickerRow({ ticker, priceData, isRateLimited, sectionLoading, holding }) {
   const chg = priceData ? fmtMktChange(priceData.change, priceData.changePct) : null;
+  const owned = holding && holding.value > 0;
 
   return (
     <div
       style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '9px 8px', borderBottom: `1px solid ${C.border}`,
+        padding: '10px 8px', borderBottom: `1px solid ${C.border}`,
         transition: 'background 0.1s', cursor: 'default',
+        gap: 12, minHeight: 44,
+        background: owned ? 'rgba(201,168,76,0.04)' : 'transparent',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = C.bgHover; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <div>
-        <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: priceData ? C.textPrimary : C.textMuted }}>
-          {ticker.symbol}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: priceData ? C.textPrimary : C.textMuted }}>
+            {ticker.symbol}
+          </span>
+          {owned && (
+            <span style={{
+              fontFamily: MONO, fontSize: 9, fontWeight: 700,
+              color: C.gold, letterSpacing: '0.5px',
+              padding: '1px 6px', borderRadius: 3,
+              background: 'rgba(201,168,76,0.10)',
+              border: '1px solid rgba(201,168,76,0.30)',
+              textTransform: 'uppercase',
+            }}>OWNED</span>
+          )}
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 1 }}>{ticker.name}</div>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, marginTop: 2 }}>{ticker.name}</div>
+        {owned && (
+          <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {fmtShares(holding.shares)} sh · {fmtFullUSD(holding.value)}
+          </div>
+        )}
       </div>
       {priceData ? (
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary }}>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums' }}>
             {fmtMktPrice(priceData.price)}
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 11, color: chg.color }}>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: chg.color, fontVariantNumeric: 'tabular-nums' }}>
             {chg.icon} {chg.text}
           </div>
         </div>
       ) : isRateLimited ? (
-        <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold }}>Rate limited — try in 1 min</div>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: C.gold, flexShrink: 0 }}>Rate limited — try in 1 min</div>
       ) : sectionLoading ? (
-        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, opacity: 0.5 }}>…</div>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, opacity: 0.5, flexShrink: 0 }}>…</div>
       ) : (
-        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted }}>—</div>
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.textMuted, flexShrink: 0 }}>—</div>
       )}
     </div>
   );
 }
 
-function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile }) {
+function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile, holdingsByTicker }) {
   const anyData = section.tickers.some(t => prices[t.symbol]);
   return (
     <div style={{ ...S.card, marginBottom: 14 }}>
@@ -3779,6 +3922,7 @@ function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile 
             priceData={prices[t.symbol] || null}
             isRateLimited={rateLimitedSet.has(t.symbol)}
             sectionLoading={loading && !prices[t.symbol]}
+            holding={holdingsByTicker?.[t.symbol]}
           />
         ))}
       </div>
@@ -3787,14 +3931,11 @@ function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile 
 }
 
 function MarketSnapshotStrip({ onTabSwitch }) {
-  const [prices] = useState(() => {
-    try {
-      const raw = localStorage.getItem('mag_market_prices');
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  });
+  // Read off the live model — same prices as everything else, so the strip
+  // ticks alongside the headline card.
+  const { prices } = useModelPortfolio();
 
-  if (!prices) return null;
+  if (!prices || Object.keys(prices).length === 0) return null;
 
   return (
     <div
@@ -3826,70 +3967,61 @@ function MarketSnapshotStrip({ onTabSwitch }) {
 }
 
 function MarketsTab() {
-  const isMobile   = useIsMobile();
-  const pricesRef  = useRef(null);
+  const isMobile = useIsMobile();
+  // Markets tab reads from the same singleton as every other portfolio
+  // surface — no second polling loop, no second cache.
+  const model = useModelPortfolio();
+  const { prices, loading, lastTs, rateLimited: rlList, fetchError, refresh, holdingsByTicker } = model;
 
-  const [prices,      setPrices]      = useState(() => {
-    try {
-      const raw = localStorage.getItem('mag_market_prices');
-      const p   = raw ? JSON.parse(raw) : {};
-      pricesRef.current = p;
-      return p;
-    } catch { pricesRef.current = {}; return {}; }
-  });
-  const [lastTs,      setLastTs]      = useState(() => {
-    try {
-      const ts = localStorage.getItem('mag_market_prices_ts');
-      return ts ? parseInt(ts, 10) : null;
-    } catch { return null; }
-  });
-  const [loading,     setLoading]     = useState(false);
-  const [rateLimited, setRateLimited] = useState(new Set());
-  const [fetchError,  setFetchError]  = useState(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setRateLimited(new Set());
-    setFetchError(null);
-    try {
-      const resp = await fetch('/api/prices/market-overview');
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data     = await resp.json();
-      const incoming = data.prices || {};
-      // Merge new prices into existing cache — preserves data for tickers
-      // that weren't fetched this round (time budget, partial result).
-      const merged   = { ...(pricesRef.current || {}), ...incoming };
-      pricesRef.current = merged;
-      setPrices(merged);
-      setRateLimited(new Set(data.rateLimited || []));
-      if (data.error) setFetchError(data.error);
-      const ts = Date.now();
-      setLastTs(ts);
-      try {
-        localStorage.setItem('mag_market_prices', JSON.stringify(merged));
-        localStorage.setItem('mag_market_prices_ts', String(ts));
-      } catch {}
-    } catch (e) {
-      setFetchError('Network error — check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const minAgo     = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
-  const hasData    = Object.keys(prices).length > 0;
-  const subTitle   = loading
+  const rateLimitedSet = useMemo(() => new Set(rlList || []), [rlList]);
+  const minAgo  = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+  const hasData = Object.keys(prices).length > 0;
+  const subTitle = loading
     ? 'Fetching prices — high-priority sections load first…'
     : minAgo != null
       ? `Last updated: ${minAgo === 0 ? 'just now' : minAgo + 'm ago'}`
       : 'No data cached — tap Refresh to load';
 
+  const upDay = model.dayChange >= 0;
+
   return (
     <div>
+      {/* ── Your Holdings (live model portfolio) ─────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 20, borderTop: `2px solid ${C.gold}`, padding: 'clamp(14px, 4vw, 20px)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={S.cardTitle}>Your Holdings</div>
+            <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {model.totalValue > 0 ? fmtFullUSD(model.totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={S.cardTitle}>Day Change</div>
+            <div style={{
+              fontFamily: MONO,
+              fontSize: 'clamp(16px, 4vw, 22px)',
+              fontWeight: 700,
+              color: model.totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
+              fontVariantNumeric: 'tabular-nums',
+              lineHeight: 1.1,
+            }}>
+              {model.totalBaseline > 0
+                ? (upDay ? '+' : '') + fmtFullUSD(model.dayChange)
+                : '—'}
+            </div>
+            {model.totalBaseline > 0 && (
+              <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                {(upDay ? '+' : '') + model.dayChangePct.toFixed(2)}% today
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── Header row ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <div style={{ fontFamily: SERIF, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 'clamp(20px, 5vw, 26px)', fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>
             Markets
           </div>
           <div style={{ fontFamily: MONO, fontSize: 11, color: loading ? C.gold : C.textMuted }}>
@@ -3900,7 +4032,7 @@ function MarketsTab() {
           )}
         </div>
         <button
-          style={{ ...S.btn, padding: '9px 22px', fontSize: 13, flexShrink: 0 }}
+          style={{ ...S.btn, padding: '11px 22px', fontSize: 13, flexShrink: 0, minHeight: 44 }}
           onClick={refresh}
           disabled={loading}
         >
@@ -3924,9 +4056,10 @@ function MarketsTab() {
           key={section.id}
           section={section}
           prices={prices}
-          rateLimitedSet={rateLimited}
+          rateLimitedSet={rateLimitedSet}
           loading={loading}
           isMobile={isMobile}
+          holdingsByTicker={holdingsByTicker}
         />
       ))}
     </div>

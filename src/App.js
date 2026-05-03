@@ -3931,9 +3931,12 @@ function MarketSectionCard({ section, prices, rateLimitedSet, loading, isMobile,
 }
 
 function MarketSnapshotStrip({ onTabSwitch }) {
-  // Read off the live model — same prices as everything else, so the strip
-  // ticks alongside the headline card.
-  const { prices } = useModelPortfolio();
+  // Reads the Markets-tab cache directly. The portfolio hook uses a
+  // separate flat-shape cache, so re-using it would lose change/changePct.
+  const [prices] = useState(() => {
+    try { const raw = localStorage.getItem('mag_market_prices'); return raw ? JSON.parse(raw) : null; }
+    catch { return null; }
+  });
 
   if (!prices || Object.keys(prices).length === 0) return null;
 
@@ -3968,12 +3971,58 @@ function MarketSnapshotStrip({ onTabSwitch }) {
 
 function MarketsTab() {
   const isMobile = useIsMobile();
-  // Markets tab reads from the same singleton as every other portfolio
-  // surface — no second polling loop, no second cache.
+  // Markets tab fetches /api/prices/market-overview directly — it needs
+  // futures, FX, indices, and metals, none of which the portfolio endpoint
+  // returns. The model hook still drives the "Your Holdings" header and
+  // the OWNED indicator on portfolio tickers.
   const model = useModelPortfolio();
-  const { prices, loading, lastTs, rateLimited: rlList, fetchError, refresh, holdingsByTicker } = model;
+  const { holdingsByTicker } = model;
 
-  const rateLimitedSet = useMemo(() => new Set(rlList || []), [rlList]);
+  const [prices, setPrices] = useState(() => {
+    try { const raw = localStorage.getItem('mag_market_prices'); return raw ? JSON.parse(raw) : {}; }
+    catch { return {}; }
+  });
+  const [lastTs, setLastTs] = useState(() => {
+    try { const v = localStorage.getItem('mag_market_prices_ts'); return v ? parseInt(v, 10) : null; }
+    catch { return null; }
+  });
+  const [loading,     setLoading]     = useState(false);
+  const [rateLimited, setRateLimited] = useState(new Set());
+  const [fetchError,  setFetchError]  = useState(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setRateLimited(new Set());
+    setFetchError(null);
+    try {
+      const resp = await fetch('/api/prices/market-overview');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const incoming = data.prices || {};
+      const merged = { ...prices, ...incoming };
+      setPrices(merged);
+      setRateLimited(new Set(data.rateLimited || []));
+      if (data.error) setFetchError(data.error);
+      const ts = Date.now();
+      setLastTs(ts);
+      try {
+        localStorage.setItem('mag_market_prices', JSON.stringify(merged));
+        localStorage.setItem('mag_market_prices_ts', String(ts));
+      } catch {}
+    } catch (e) {
+      setFetchError('Network error — check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [prices]);
+
+  // Initial fetch on mount.
+  useEffect(() => {
+    if (Object.keys(prices).length === 0) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rateLimitedSet = rateLimited;
   const minAgo  = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
   const hasData = Object.keys(prices).length > 0;
   const subTitle = loading

@@ -49,10 +49,17 @@ export const PORTFOLIO_ALLOCATION = [
   ]},
 ];
 
-// Storage keys (kept stable so existing user sessions don't lose their frozen shares).
-export const LANDING_SHARES_KEY = 'mag_landing_shares';
-export const PRICES_CACHE_KEY    = 'mag_market_prices';
-export const PRICES_CACHE_TS_KEY = 'mag_market_prices_ts';
+// Storage keys.
+//
+// LANDING_SHARES_KEY  — frozen-share snapshot per session. Kept stable so
+//                       existing user sessions don't lose their frozen state.
+// PRICES_CACHE_KEY    — the model-portfolio price cache. Distinct from the
+//                       Markets-tab cache (`mag_market_prices`) since the
+//                       portfolio endpoint returns a flat ticker → number
+//                       map and the markets endpoint returns nested objects.
+export const LANDING_SHARES_KEY  = 'mag_landing_shares';
+export const PRICES_CACHE_KEY    = 'mag_portfolio_prices';
+export const PRICES_CACHE_TS_KEY = 'mag_portfolio_prices_ts';
 
 // Bucket display order on the Portfolio tab (largest first by intent).
 export const PORTFOLIO_TAB_BUCKET_ORDER = [

@@ -12,9 +12,14 @@ import {
 // Single source of truth: this is the ONE place the app turns prices into
 // position values, bucket totals, day-change, and percentages. Every
 // consumer (Dashboard headline, KPI row, Portfolio tab tables, Net Worth
-// tab, Markets tab, Spending/Tithe/Roadmap context strips) reads the
-// already-computed values off `buckets` / `totalValue` / `dayChange`. No
-// component recalculates anything independently.
+// tab, Spending/Tithe/Roadmap context strips) reads the already-computed
+// values off `buckets` / `totalValue` / `dayChange`. No component
+// recalculates anything independently.
+//
+// Endpoint: /api/prices/portfolio — dedicated to PORTFOLIO_ALLOCATION
+// tickers only, returning a FLAT shape: { prices: { TICKER: number, ... } }.
+// The Markets tab uses /api/prices/market-overview (different cache, nested
+// shape) — they're intentionally separate.
 
 const ALL_TICKERS = PORTFOLIO_ALLOCATION.flatMap(b => b.holdings.map(h => h.ticker));
 
@@ -28,6 +33,8 @@ function loadInt(storage, key) {
 }
 
 const _state = {
+  // prices: flat map { ticker: priceNumber }. Hydrated from localStorage on
+  // module load; updated atomically with each fresh fetch.
   prices: typeof localStorage !== 'undefined' ? loadJSON(localStorage, PRICES_CACHE_KEY, {}) : {},
   lastTs: typeof localStorage !== 'undefined' ? loadInt(localStorage, PRICES_CACHE_TS_KEY) : null,
   loading: false,
@@ -61,7 +68,7 @@ function clearFrozen() {
 }
 
 function pricedTickerCount() {
-  return ALL_TICKERS.filter(t => (_state.prices[t]?.price ?? 0) > 0).length;
+  return ALL_TICKERS.filter(t => (_state.prices[t] ?? 0) > 0).length;
 }
 
 // Atomic freeze, gated on a SINGLE API response covering every ticker.
@@ -74,8 +81,8 @@ function pricedTickerCount() {
 // SCHD/JEPI/GLD/SLV would freeze a $2.7M baseline.
 function freezeFromResponse(incoming) {
   const incomingKeys = incoming && typeof incoming === 'object' ? Object.keys(incoming) : [];
-  const received = ALL_TICKERS.filter(t => (incoming?.[t]?.price ?? 0) > 0);
-  const missing  = ALL_TICKERS.filter(t => !((incoming?.[t]?.price ?? 0) > 0));
+  const received = ALL_TICKERS.filter(t => (incoming?.[t] ?? 0) > 0);
+  const missing  = ALL_TICKERS.filter(t => !((incoming?.[t] ?? 0) > 0));
 
   console.log('[GATE] expected:', ALL_TICKERS);
   console.log('[GATE] received:', received);
@@ -103,7 +110,7 @@ function freezeFromResponse(incoming) {
   const fresh = {};
   PORTFOLIO_ALLOCATION.forEach(bucket => {
     bucket.holdings.forEach(h => {
-      const p = incoming[h.ticker].price;
+      const p = incoming[h.ticker];
       fresh[h.ticker] = {
         shares: (h.pct / 100) * PORTFOLIO_BASELINE_USD / p,
         baselinePrice: p,
@@ -147,18 +154,20 @@ async function fetchModel({ silent = false } = {}) {
   let responseCoveredAll = false;
   _activeFetch = (async () => {
     try {
-      const resp = await fetch('/api/prices/market-overview');
+      const resp = await fetch('/api/prices/portfolio');
       if (!resp.ok) {
         _state.fetchError = `Network error (${resp.status})`;
         return;
       }
       const data = await resp.json();
       const topLevelKeys = data && typeof data === 'object' ? Object.keys(data) : [];
-      console.log('[GATE] /api/prices/market-overview top-level keys:', topLevelKeys);
+      console.log('[GATE] /api/prices/portfolio top-level keys:', topLevelKeys);
       const incoming = data.prices || {};
       console.log('[GATE] data.prices is object?', !!incoming && typeof incoming === 'object',
         '· keys count:', Object.keys(incoming || {}).length);
       if (Object.keys(incoming).length > 0) {
+        // Flat shape: { TICKER: price }. Merge into accumulated cache so we
+        // don't lose tickers that came back in a previous fetch.
         _state.prices = { ..._state.prices, ...incoming };
         _state.lastTs = Date.now();
         persistPrices();
@@ -199,7 +208,9 @@ function buildView() {
   const buckets = PORTFOLIO_ALLOCATION.map(bucket => {
     const holdings = bucket.holdings.map(h => {
       const f = _state.frozen[h.ticker];
-      const livePrice     = _state.prices[h.ticker]?.price ?? null;
+      const livePrice     = (typeof _state.prices[h.ticker] === 'number' && _state.prices[h.ticker] > 0)
+        ? _state.prices[h.ticker]
+        : null;
       const shares        = f?.shares ?? null;
       const baselinePrice = f?.baselinePrice ?? null;
       const value    = (shares != null && livePrice > 0)     ? shares * livePrice     : 0;

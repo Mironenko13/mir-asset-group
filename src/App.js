@@ -792,6 +792,12 @@ export default function App() {
         /* Bottom nav strip on mobile — horizontal-scroll, no visible scrollbar. */
         .mag-bottom-nav::-webkit-scrollbar { display: none; height: 0; width: 0; }
         .mag-bottom-nav { -ms-overflow-style: none; }
+        /* Bucket card drill-down hover — only fires on devices that support
+           hover (desktop), not phones, so taps don't leave a stuck state. */
+        @media (hover: hover) {
+          .mag-bucket-card:hover { background: #1a3529; }
+        }
+        .mag-bucket-card:focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
         /* Mobile accessibility: every interactive element gets a 44px tap
            target. Desktop styles win above 768px. */
         @media (max-width: 767px) {
@@ -947,12 +953,147 @@ function LivePortfolioStrip({ label = 'Portfolio' }) {
   );
 }
 
+// ─── Bucket Detail View (Dashboard drill-down) ────────────────────────────────
+// Focused view for a single bucket: tap a bucket card on the Dashboard →
+// land here → tap Back → return to Dashboard. Holdings sorted by position
+// value descending. Portfolio tab still shows the all-buckets view; this
+// drill-down is a Dashboard-only quick inspection.
+function BucketDetailView({ bucket, totalValue, onBack }) {
+  const isMobile = useIsMobile();
+  const sortedHoldings = useMemo(
+    () => [...bucket.holdings].sort((a, b) => b.value - a.value),
+    [bucket]
+  );
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          fontFamily: MONO,
+          fontSize: 12,
+          fontWeight: 600,
+          padding: '10px 14px',
+          minHeight: 44,
+          background: 'transparent',
+          border: `1px solid ${C.border}`,
+          borderRadius: 6,
+          color: C.textSec,
+          cursor: 'pointer',
+          marginBottom: 16,
+          letterSpacing: '0.4px',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        ‹ Back to Dashboard
+      </button>
+
+      {/* Bucket header */}
+      <div style={{ ...S.card, marginBottom: 18, borderTop: `2px solid ${bucket.color}`, padding: 'clamp(14px, 4vw, 22px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
+          <div style={{ fontFamily: SERIF, fontSize: 'clamp(20px, 5vw, 26px)', fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
+            {bucket.label}
+          </div>
+        </div>
+        <div style={{
+          fontFamily: MONO,
+          fontSize: 'clamp(22px, 6vw, 32px)',
+          fontWeight: 700,
+          color: C.gold,
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1.1,
+          wordBreak: 'keep-all',
+        }}>
+          {fmtFullUSD(bucket.value)}
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, marginTop: 6, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.4px' }}>
+          {bucket.pctOfPortfolio.toFixed(2)}% of portfolio · {bucket.holdings.length} holding{bucket.holdings.length === 1 ? '' : 's'}
+        </div>
+      </div>
+
+      {/* Holdings — table on desktop, stacked cards on mobile */}
+      <div style={{ ...S.card, padding: 'clamp(14px, 4vw, 20px)' }}>
+        <div style={{ ...S.cardTitle, marginBottom: 10 }}>Holdings · sorted by value</div>
+        {isMobile ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sortedHoldings.map(h => (
+              <div
+                key={h.ticker}
+                style={{
+                  background: C.bgInput,
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  borderLeft: `2px solid ${bucket.color}55`,
+                  minHeight: 56,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
+                    {h.ticker}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 'clamp(14px, 3.8vw, 16px)', fontWeight: 700, color: h.value > 0 ? C.gold : C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                    {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                  <span>{fmtShares(h.shares)} sh</span>
+                  <span>·</span>
+                  <span>{fmtPrice(h.livePrice)}</span>
+                  <span>·</span>
+                  <span>{bucket.value > 0 && h.value > 0 ? `${h.pctOfBucket.toFixed(2)}% of bucket` : '— of bucket'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ ...S.table, minWidth: 500 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Shares</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Price</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Position Value</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Bucket</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedHoldings.map(h => (
+                  <tr key={h.ticker}>
+                    <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>{h.ticker}</td>
+                    <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtShares(h.shares)}
+                    </td>
+                    <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtPrice(h.livePrice)}
+                    </td>
+                    <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
+                      {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                    </td>
+                    <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
+                      {bucket.value > 0 && h.value > 0 ? h.pctOfBucket.toFixed(2) + '%' : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Landing Portfolio Card ────────────────────────────────────────────────────
-// Live-priced model portfolio shown as the headline of the post-PIN landing view.
-// Shares are frozen at first live-price fetch (per session) so total moves naturally
-// with the market. Reads/writes shared market-overview cache (mag_market_prices) so
-// it doesn't add a second polling loop.
-function LandingPortfolioCard() {
+// Snapshot-mode model portfolio shown as the headline of the post-PIN landing
+// view. Each bucket card is clickable on Dashboard — drives the bucket
+// drill-down. Numbers are static (see src/constants/portfolio.js).
+function LandingPortfolioCard({ onBucketClick }) {
   const { buckets, totalValue, snapshotLabel } = useModelPortfolio();
 
   const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
@@ -988,35 +1129,57 @@ function LandingPortfolioCard() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: 10,
       }}>
-        {buckets.map(b => (
-          <div key={b.id} style={{
-            background: C.bgInput,
-            borderRadius: 6,
-            padding: '12px 14px',
-            borderLeft: `3px solid ${b.color}`,
-          }}>
-            <div style={{
-              fontFamily: MONO, fontSize: 9, fontWeight: 700,
-              color: b.color, letterSpacing: '0.8px',
-              textTransform: 'uppercase', marginBottom: 6,
-            }}>
-              {b.label}
-            </div>
-            <div style={{
-              fontFamily: MONO,
-              fontSize: 'clamp(14px, 3.5vw, 18px)',
-              fontWeight: 700,
-              color: C.textPrimary,
-              marginBottom: 3,
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-              {b.value > 0 ? fmtShort(b.value) : '—'}
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-              {`${b.pctOfPortfolio.toFixed(2)}% of portfolio`}
-            </div>
-          </div>
-        ))}
+        {buckets.map(b => {
+          const clickable = !!onBucketClick;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={clickable ? () => onBucketClick(b.id) : undefined}
+              className="mag-bucket-card"
+              aria-label={clickable ? `Drill into ${b.label} bucket` : undefined}
+              style={{
+                background: C.bgInput,
+                borderRadius: 6,
+                padding: '12px 14px',
+                borderLeft: `3px solid ${b.color}`,
+                borderTop: 'none', borderRight: 'none', borderBottom: 'none',
+                textAlign: 'left',
+                cursor: clickable ? 'pointer' : 'default',
+                color: 'inherit',
+                font: 'inherit',
+                minHeight: 44,
+                transition: 'background 0.15s, transform 0.15s',
+                WebkitTapHighlightColor: 'transparent',
+                position: 'relative',
+              }}
+            >
+              <div style={{
+                fontFamily: MONO, fontSize: 9, fontWeight: 700,
+                color: b.color, letterSpacing: '0.8px',
+                textTransform: 'uppercase', marginBottom: 6,
+              }}>
+                {b.label}
+              </div>
+              <div style={{
+                fontFamily: MONO,
+                fontSize: 'clamp(14px, 3.5vw, 18px)',
+                fontWeight: 700,
+                color: C.textPrimary,
+                marginBottom: 3,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {b.value > 0 ? fmtShort(b.value) : '—'}
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                <span>{`${b.pctOfPortfolio.toFixed(2)}% of portfolio`}</span>
+                {clickable && (
+                  <span aria-hidden="true" style={{ color: b.color, fontSize: 12, fontWeight: 700, lineHeight: 1 }}>›</span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1166,12 +1329,20 @@ function KpiCard({ label, value, sub, subColor, accent, onClick }) {
 function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddExpense, onTabSwitch, targets, transactions, onRefreshPrices, priceLoading, priceTs }) {
   const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [drilldownBucketId, setDrilldownBucketId] = useState(null);
   const { alloc } = useMemo(() => portfolioStats(positions), [positions]);
   const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
 
   // Snapshot-mode model portfolio drives the headline KPI cards.
   const model = useModelPortfolio();
   const portfolioTotal = model.totalValue;
+
+  // Bucket drill-down (Dashboard-only quick inspection — Portfolio tab is
+  // still the full all-buckets view). Click a bucket card on the headline
+  // portfolio → enter drill-down → click "Back" to return.
+  const drilldownBucket = drilldownBucketId
+    ? model.buckets.find(b => b.id === drilldownBucketId)
+    : null;
 
   const thisMonthExp = useMemo(() => expenses.filter(e => e.date.startsWith(CURRENT_MONTH)), [expenses]);
   const monthlyTithe = Math.round(MONTHLY_GROSS * TITHE_RATE);
@@ -1203,10 +1374,20 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
 
   const recentExp = expenses.slice(0, 5);
 
+  if (drilldownBucket) {
+    return (
+      <BucketDetailView
+        bucket={drilldownBucket}
+        totalValue={model.totalValue}
+        onBack={() => setDrilldownBucketId(null)}
+      />
+    );
+  }
+
   return (
     <div>
-      {/* ── Headline portfolio (live-priced model portfolio) ── */}
-      <LandingPortfolioCard />
+      {/* ── Headline portfolio (snapshot model) ── */}
+      <LandingPortfolioCard onBucketClick={setDrilldownBucketId} />
 
       {/* Welcome area */}
       <div style={{ marginBottom: 24 }}>

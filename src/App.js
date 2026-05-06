@@ -928,29 +928,20 @@ export default function App() {
 // Compact live-portfolio context strip used at the top of Spending, Tithe,
 // Roadmap, and other secondary tabs. Same shared hook → ticks live with
 // every other portfolio surface.
-function LivePortfolioStrip({ label = 'Live Portfolio' }) {
-  const { totalValue, totalBaseline, dayChange, dayChangePct } = useModelPortfolio();
-  const upDay = dayChange >= 0;
+function LivePortfolioStrip({ label = 'Portfolio' }) {
+  const { totalValue, snapshotLabel } = useModelPortfolio();
   return (
     <div style={{ ...S.card, marginBottom: 16, padding: 'clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px)', borderTop: `2px solid ${C.gold}` }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={S.cardTitle}>{label}</div>
           <div style={{ fontFamily: MONO, fontSize: 'clamp(18px, 4.6vw, 24px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-            {totalValue > 0 ? fmtFullUSD(totalValue) : '—'}
+            {fmtFullUSD(totalValue)}
           </div>
         </div>
-        {totalBaseline > 0 && (
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={S.cardTitle}>Day</div>
-            <div style={{ fontFamily: MONO, fontSize: 'clamp(13px, 3.4vw, 16px)', fontWeight: 700, color: upDay ? C.green : C.red, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-              {(upDay ? '+' : '') + fmtFullUSD(dayChange)}
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, fontVariantNumeric: 'tabular-nums' }}>
-              {(upDay ? '+' : '') + dayChangePct.toFixed(2)}%
-            </div>
-          </div>
-        )}
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '0.4px', flexShrink: 0 }}>
+          {snapshotLabel}
+        </div>
       </div>
     </div>
   );
@@ -962,10 +953,7 @@ function LivePortfolioStrip({ label = 'Live Portfolio' }) {
 // with the market. Reads/writes shared market-overview cache (mag_market_prices) so
 // it doesn't add a second polling loop.
 function LandingPortfolioCard() {
-  const model = useModelPortfolio();
-  const { buckets, totalValue, totalBaseline, dayChange, dayChangePct, allFrozen, lastTs, loading, refresh } = model;
-  const upDay   = dayChange >= 0;
-  const minAgo  = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+  const { buckets, totalValue, snapshotLabel } = useModelPortfolio();
 
   const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
 
@@ -987,43 +975,11 @@ function LandingPortfolioCard() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           }}>
-            {totalValue > 0 ? fmtFullUSD(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+            {fmtFullUSD(totalValue)}
           </div>
-          <div style={{
-            fontFamily: MONO,
-            fontSize: 'clamp(11px, 2.6vw, 14px)',
-            fontWeight: 700,
-            color: totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
-            marginTop: 6,
-            fontVariantNumeric: 'tabular-nums',
-            display: 'flex', flexWrap: 'wrap', columnGap: 6, rowGap: 2,
-          }}>
-            {totalBaseline > 0 ? (
-              <>
-                <span>{upDay ? '▲ +' : '▼ '}{fmtShort(Math.abs(dayChange))}</span>
-                <span>({upDay ? '+' : ''}{dayChangePct.toFixed(2)}%) today</span>
-              </>
-            ) : 'Loading prices…'}
+          <div style={{ fontFamily: MONO, fontSize: 'clamp(10px, 2.4vw, 11px)', color: C.textMuted, marginTop: 6, letterSpacing: '0.5px' }}>
+            {snapshotLabel}
           </div>
-          {totalBaseline > 0 && !allFrozen && (
-            <div style={{ fontFamily: MONO, fontSize: 'clamp(9px, 2vw, 10px)', color: C.gold, marginTop: 4, lineHeight: 1.4 }}>
-              Some prices still loading — total fills in as they arrive
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-          {minAgo != null && (
-            <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted }}>
-              Prices: {minAgo === 0 ? 'just now' : `${minAgo}m ago`}
-            </span>
-          )}
-          <button
-            style={{ ...S.btnGhost, padding: '8px 14px', fontSize: 11, minHeight: 44 }}
-            onClick={refresh}
-            disabled={loading}
-          >
-            {loading ? '⟳ …' : '↻ Refresh'}
-          </button>
         </div>
       </div>
 
@@ -1057,7 +1013,7 @@ function LandingPortfolioCard() {
               {b.value > 0 ? fmtShort(b.value) : '—'}
             </div>
             <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-              {totalValue > 0 ? `${b.pctOfPortfolio.toFixed(2)}% of portfolio` : 'Loading…'}
+              {`${b.pctOfPortfolio.toFixed(2)}% of portfolio`}
             </div>
           </div>
         ))}
@@ -1213,30 +1169,20 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
   const { alloc } = useMemo(() => portfolioStats(positions), [positions]);
   const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
 
-  // Live model portfolio drives the headline KPI cards (portfolio total, day
-  // change, borrowing power, monthly draw budget). Single shared hook → no
-  // duplicate fetches with LandingPortfolioCard.
+  // Snapshot-mode model portfolio drives the headline KPI cards.
   const model = useModelPortfolio();
   const portfolioTotal = model.totalValue;
-  const portfolioDayChange    = model.dayChange;
-  const portfolioDayChangePct = model.dayChangePct;
-  const portfolioReady        = model.totalBaseline > 0;
 
   const thisMonthExp = useMemo(() => expenses.filter(e => e.date.startsWith(CURRENT_MONTH)), [expenses]);
   const monthlyTithe = Math.round(MONTHLY_GROSS * TITHE_RATE);
   const monthlySpend = thisMonthExp.reduce((s, e) => s + e.amount, 0);
-  // "Available to Invest" — keep the existing tithe/expenses subtraction but
-  // size the underlying monthly figure off the live portfolio (3.5%/mo draw).
+  // "Available to Invest" — tithe/expenses subtraction with the underlying
+  // monthly figure sized off the snapshot portfolio (3.5%/mo draw).
   const monthlyPortfolioDraw = portfolioTotal * MONTHLY_DRAW_PCT;
   const deployable = monthlyPortfolioDraw - monthlyTithe - monthlySpend;
 
-  // Borrowing power: buy-borrow-die LTV against the live portfolio total.
+  // Borrowing power: buy-borrow-die LTV against the snapshot total.
   const borrowingPower = portfolioTotal * BORROWING_LTV_PCT;
-
-  // Month's P&L — real MTD requires historical daily snapshots we don't track
-  // yet, so for now this mirrors the day change off the session baseline.
-  const monthPnl    = portfolioDayChange;
-  const monthPnlPct = portfolioDayChangePct;
 
   const checklistItems = [
     { key: 'portfolio', label: 'Add your first position',        tab: 'portfolio', done: positions.length > 0 },
@@ -1285,37 +1231,32 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
       }}>
         <KpiCard
           label="Your Portfolio"
-          value={portfolioTotal > 0 ? fmt$(portfolioTotal, 0) : '—'}
-          sub={portfolioReady
-            ? (portfolioDayChange >= 0 ? '▲ +' : '▼ ') + Math.abs(portfolioDayChangePct).toFixed(2) + '% today'
-            : 'Loading prices…'}
-          subColor={portfolioReady ? (portfolioDayChange >= 0 ? C.green : C.red) : C.textMuted}
+          value={fmt$(portfolioTotal, 0)}
+          sub={model.snapshotLabel}
+          subColor={C.textMuted}
           accent="#d4a843"
           onClick={() => onTabSwitch('portfolio')}
         />
         <KpiCard
           label="Available to Invest"
-          value={portfolioTotal > 0 ? fmt$(deployable, 0) : '—'}
-          sub={portfolioTotal > 0 ? '3.5%/mo draw, less tithe & expenses' : 'Loading prices…'}
+          value={fmt$(deployable, 0)}
+          sub="3.5%/mo draw, less tithe & expenses"
           subColor={deployable >= 0 ? C.green : C.red}
           accent={deployable >= 0 ? C.green : C.red}
           onClick={() => onTabSwitch('spending')}
         />
         <KpiCard
           label="Borrowing Power"
-          value={portfolioTotal > 0 ? fmt$(borrowingPower, 0) : '—'}
+          value={fmt$(borrowingPower, 0)}
           sub="40% LTV against portfolio"
           accent="#6366f1"
           onClick={() => onTabSwitch('roadmap')}
         />
         <KpiCard
-          label="Month's P&L"
-          value={portfolioReady ? (monthPnl >= 0 ? '+' : '') + fmt$(monthPnl, 0) : '—'}
-          sub={portfolioReady
-            ? (monthPnl >= 0 ? '+' : '') + monthPnlPct.toFixed(2) + '% — day-change proxy'
-            : 'Loading prices…'}
-          subColor={portfolioReady ? (monthPnl >= 0 ? C.green : C.red) : C.textMuted}
-          accent={portfolioReady ? (monthPnl >= 0 ? C.green : C.red) : '#d4a843'}
+          label="Positions"
+          value={String(model.positionCount)}
+          sub={`across ${model.bucketCount} buckets`}
+          accent="#22c55e"
           onClick={() => onTabSwitch('portfolio')}
         />
       </div>
@@ -1507,8 +1448,6 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
   };
   const handleDelete = (id) => { if (window.confirm('Delete this position?')) setPositions(p => p.filter(x => x.id !== id)); };
 
-  const minAgo = model.lastTs ? Math.round((Date.now() - model.lastTs) / 60000) : null;
-  const upDay  = model.dayChange >= 0;
   const totalValue = model.totalValue;
 
   return (
@@ -1518,18 +1457,10 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
         <div>
           <div style={{ fontFamily: SERIF, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: C.textPrimary }}>Portfolio</div>
           <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, marginTop: 2, letterSpacing: '0.4px' }}>
-            Live model · {model.positionCount} holdings · {model.bucketCount} buckets
+            {model.snapshotLabel} · {model.positionCount} holdings · {model.bucketCount} buckets
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {minAgo != null && (
-            <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted }}>
-              Prices: {minAgo === 0 ? 'just now' : `${minAgo}m ago`}
-            </span>
-          )}
-          <button style={{ ...S.btnGhost, minHeight: 36, fontSize: 12 }} onClick={model.refresh} disabled={model.loading}>
-            {model.loading ? '⟳ …' : '↻ Refresh'}
-          </button>
           <button style={{ ...S.btnGhost, minHeight: 36, fontSize: 12 }} onClick={() => setShowAdd(true)}>+ Custom</button>
         </div>
       </div>
@@ -1544,29 +1475,11 @@ function PortfolioTab({ positions, setPositions, transactions, setTransactions }
           <div>
             <div style={S.cardTitle}>Total Portfolio Value</div>
             <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, wordBreak: 'keep-all' }}>
-              {totalValue > 0 ? fmtFullUSD(totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+              {fmtFullUSD(totalValue)}
             </div>
-          </div>
-          <div>
-            <div style={S.cardTitle}>Day Change</div>
-            <div style={{
-              fontFamily: MONO,
-              fontSize: 'clamp(20px, 5.5vw, 28px)',
-              fontWeight: 700,
-              color: model.totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.1,
-              wordBreak: 'keep-all',
-            }}>
-              {model.totalBaseline > 0
-                ? (upDay ? '+' : '') + fmtFullUSD(model.dayChange)
-                : '—'}
+            <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, marginTop: 4, letterSpacing: '0.4px' }}>
+              {model.snapshotLabel}
             </div>
-            {model.totalBaseline > 0 && (
-              <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                {(upDay ? '+' : '') + model.dayChangePct.toFixed(2)}% today
-              </div>
-            )}
           </div>
           <div>
             <div style={S.cardTitle}># of Positions</div>
@@ -1716,13 +1629,7 @@ function BucketSection({ bucket, totalValue, isMobile }) {
                 {isOpen && h.shares != null && h.livePrice > 0 && (
                   <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.bgPrimary}`, fontFamily: MONO, fontSize: 11, color: C.textSec, fontVariantNumeric: 'tabular-nums', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
                     <span>Target wt: {h.targetPct}%</span>
-                    <span>Baseline: {fmtPrice(h.baselinePrice)}</span>
-                    <span style={{ color: h.dayChange >= 0 ? C.green : C.red }}>
-                      Day: {h.dayChange >= 0 ? '+' : ''}{fmtFullUSD(h.dayChange)}
-                    </span>
-                    <span style={{ color: h.dayChange >= 0 ? C.green : C.red }}>
-                      {h.dayChange >= 0 ? '+' : ''}{h.dayChangePct.toFixed(2)}%
-                    </span>
+                    <span>Snapshot price: {fmtPrice(h.baselinePrice)}</span>
                   </div>
                 )}
               </div>
@@ -2346,7 +2253,7 @@ function SpendingTab({ expenses, setExpenses }) {
 
   return (
     <div>
-      <LivePortfolioStrip label="Live Portfolio" />
+      <LivePortfolioStrip label="Portfolio" />
       <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', marginBottom: 16, gap: 10 }}>
         <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: '#e8e4d8' }}>Spending Tracker</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
@@ -2580,11 +2487,9 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
   const momChange   = latestTotal - prevTotal;
   const momPct      = prevTotal > 0 ? (momChange / prevTotal) * 100 : 0;
 
-  // Live model portfolio plugged into net worth via the same shared hook —
-  // single source of truth with the Dashboard headline / Portfolio tab.
+  // Snapshot-mode model portfolio plugged into net worth — single source of
+  // truth with the Dashboard headline / Portfolio tab.
   const livePortfolio    = model.totalValue;
-  const livePortfolioDay = model.dayChange;
-  const livePortfolioPct = model.dayChangePct;
   const combinedNetWorth = latestTotal + livePortfolio;
 
   const fmtMonth = (m) => {
@@ -2642,18 +2547,16 @@ function NetWorthTab({ snapshots, setSnapshots, milestones, setMilestones }) {
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard
-          label="Live Portfolio"
-          value={livePortfolio > 0 ? fmt$(livePortfolio, 0) : '—'}
-          sub={model.totalBaseline > 0
-            ? (livePortfolioDay >= 0 ? '▲ +' : '▼ ') + Math.abs(livePortfolioPct).toFixed(2) + '% today'
-            : 'Loading prices…'}
-          subColor={model.totalBaseline > 0 ? (livePortfolioDay >= 0 ? C.green : C.red) : C.textMuted}
+          label="Portfolio"
+          value={fmt$(livePortfolio, 0)}
+          sub={model.snapshotLabel}
+          subColor={C.textMuted}
           accent="#d4a843"
         />
         <KpiCard
           label="Combined Net Worth"
           value={fmt$(combinedNetWorth, 0)}
-          sub={latest ? `Snapshot ${fmtMonth(latest.month)} + live portfolio` : 'Live portfolio only — add a snapshot for a full picture'}
+          sub={latest ? `Snapshot ${fmtMonth(latest.month)} + portfolio snapshot` : 'Portfolio snapshot only — add a net-worth snapshot for a full picture'}
           accent="#5ab87a"
         />
         <KpiCard label="MoM Change"          value={fmt$(momChange, 0)} sub={fmtPct(momPct)} subColor={momChange >= 0 ? '#5ab87a' : '#c45555'} accent={momChange >= 0 ? '#5ab87a' : '#c45555'} />
@@ -2960,15 +2863,10 @@ function ProgressRing({ pct, size = 80, stroke = 8, color = '#c9a84c', children 
 function TitheTab({ givingEntries, setGivingEntries }) {
   const [showAdd,   setShowAdd]   = useState(false);
   const [viewYear,  setViewYear]  = useState(String(new Date().getFullYear()));
-  const model = useModelPortfolio();
 
   const currentYear  = String(new Date().getFullYear());
   const currentMonth = new Date().getMonth(); // 0-based
   const monthlyTarget = Math.round(MONTHLY_GROSS * TITHE_RATE);
-
-  // Tithe-on-gains: when the portfolio is up today, suggest 10% of today's
-  // gain as an additional gift. Reads live day-change off the singleton.
-  const tithableGain = model.dayChange > 0 ? model.dayChange * TITHE_RATE : 0;
 
   const ytdEntries = useMemo(() =>
     givingEntries.filter(e => e.date.startsWith(viewYear)),
@@ -3008,15 +2906,7 @@ function TitheTab({ givingEntries, setGivingEntries }) {
 
   return (
     <div>
-      <LivePortfolioStrip label="Live Portfolio" />
-      {tithableGain > 0 && (
-        <div style={{ ...S.card, marginBottom: 16, padding: '10px 14px', borderLeft: `3px solid ${C.green}` }}>
-          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textSec, lineHeight: 1.5 }}>
-            Portfolio gained <strong style={{ color: C.green, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{fmtFullUSD(model.dayChange)}</strong> today —
-            tithe-on-gains suggestion: <strong style={{ color: C.gold, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{fmtFullUSD(tithableGain)}</strong>.
-          </div>
-        </div>
-      )}
+      <LivePortfolioStrip label="Portfolio" />
       {/* Plain language intro with progress ring */}
       <div style={{ ...S.card, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
         <ProgressRing pct={monthThisPct} size={80} color={C.gold}>
@@ -3225,7 +3115,7 @@ function RoadmapTab({ roadmapSavings, setRoadmapSavings }) {
 
   return (
     <div>
-      <LivePortfolioStrip label="Live Portfolio" />
+      <LivePortfolioStrip label="Portfolio" />
       <div style={{ fontSize: 'clamp(18px, 4.6vw, 22px)', fontWeight: 700, color: '#e8e4d8', marginBottom: 4 }}>Asset Acquisition Roadmap</div>
       <div style={{ fontSize: 12, color: '#6a6a58', marginBottom: 20 }}>Funded via 40% LTV portfolio loans · live</div>
 
@@ -4031,38 +3921,20 @@ function MarketsTab() {
       ? `Last updated: ${minAgo === 0 ? 'just now' : minAgo + 'm ago'}`
       : 'No data cached — tap Refresh to load';
 
-  const upDay = model.dayChange >= 0;
 
   return (
     <div>
-      {/* ── Your Holdings (live model portfolio) ─────────────────────── */}
+      {/* ── Your Holdings (snapshot model portfolio) ─────────────────── */}
       <div style={{ ...S.card, marginBottom: 20, borderTop: `2px solid ${C.gold}`, padding: 'clamp(14px, 4vw, 20px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={S.cardTitle}>Your Holdings</div>
             <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-              {model.totalValue > 0 ? fmtFullUSD(model.totalValue) : <span style={{ color: C.textMuted }}>—</span>}
+              {fmtFullUSD(model.totalValue)}
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={S.cardTitle}>Day Change</div>
-            <div style={{
-              fontFamily: MONO,
-              fontSize: 'clamp(16px, 4vw, 22px)',
-              fontWeight: 700,
-              color: model.totalBaseline > 0 ? (upDay ? C.green : C.red) : C.textMuted,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.1,
-            }}>
-              {model.totalBaseline > 0
-                ? (upDay ? '+' : '') + fmtFullUSD(model.dayChange)
-                : '—'}
-            </div>
-            {model.totalBaseline > 0 && (
-              <div style={{ fontFamily: MONO, fontSize: 11, color: upDay ? C.green : C.red, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                {(upDay ? '+' : '') + model.dayChangePct.toFixed(2)}% today
-              </div>
-            )}
+          <div style={{ textAlign: 'right', fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '0.4px' }}>
+            {model.snapshotLabel}
           </div>
         </div>
       </div>

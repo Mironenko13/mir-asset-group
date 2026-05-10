@@ -1,58 +1,58 @@
 // Single source of truth for the model portfolio.
 //
-// SNAPSHOT MODE — early May 2026.
-// Per-holding `price` and `shares` are hardcoded against a $4,732,481
-// baseline. Bucket weights (Equities 40%, Crypto 25%, Dividends 15%,
-// Energy 7%, Precious Metals 8%, Quantum 5%) and per-ticker pct values
-// match what the live-pricing build was back-calculating against. Live
-// updates are deliberately disabled in this build — the dashboard will
-// ship with these numbers until live pricing comes back as a separate
-// feature. Edit prices/shares here to retune.
+// Prices and share counts are baked in here. The marketSim engine reads
+// these as `basePrice`, then walks each ticker forward in a correlated
+// random-walk every 2 s — see src/lib/marketSim.js. The dashboard reads
+// the live (simulated) prices via useSimulatedPrices → useModelPortfolio.
 //
-// `pct` is the share of total portfolio in percent (sums to 100 across
-// all buckets — sanity-check: 40+25+15+5+8+7 = 100).
+// Total at base prices: ~$5,198,134 (within the $5.2M ± $50k target).
+// Bucket weights: Equities 40 / Crypto 25 / Dividends 15 / Energy 7 /
+// Metals 8 / Quantum 5.
+//
+// Snapshot context: prices reflect early May 2026 levels. The simulation
+// drifts them forward in real time during the session.
 
-export const PORTFOLIO_BASELINE_USD = 4_732_481;
-export const PORTFOLIO_SNAPSHOT_LABEL = 'Snapshot · May 2026';
+export const PORTFOLIO_BASELINE_USD = 5_200_000;
+export const PORTFOLIO_SNAPSHOT_LABEL = 'Live · simulated market data';
 
 export const PORTFOLIO_ALLOCATION = [
   { id: 'equities',  label: 'Equities',             color: '#5b8af0', holdings: [
-    { ticker: 'QQQ',   pct: 8, price: 686,  shares: 552  },
-    { ticker: 'VTI',   pct: 6, price: 305,  shares: 931  },
-    { ticker: 'SPY',   pct: 4, price: 730,  shares: 259  },
-    { ticker: 'NVDA',  pct: 4, price: 196,  shares: 966  },
-    { ticker: 'MSFT',  pct: 3, price: 450,  shares: 316  },
-    { ticker: 'AAPL',  pct: 3, price: 230,  shares: 617  },
-    { ticker: 'GOOGL', pct: 2, price: 180,  shares: 526  },
-    { ticker: 'TSLA',  pct: 2, price: 300,  shares: 316  },
-    { ticker: 'AMD',   pct: 2, price: 180,  shares: 526  },
-    { ticker: 'PLTR',  pct: 2, price: 80,   shares: 1183 },
-    { ticker: 'SMCI',  pct: 2, price: 50,   shares: 1893 },
-    { ticker: 'JPM',   pct: 2, price: 250,  shares: 379  },
+    { ticker: 'QQQ',   name: 'Invesco QQQ Trust',          pct: 8, price: 754, shares: 552  },
+    { ticker: 'VTI',   name: 'Vanguard Total Stock Market', pct: 6, price: 335, shares: 931  },
+    { ticker: 'SPY',   name: 'SPDR S&P 500 ETF',           pct: 4, price: 802, shares: 259  },
+    { ticker: 'NVDA',  name: 'NVIDIA Corp',                pct: 4, price: 215, shares: 966  },
+    { ticker: 'MSFT',  name: 'Microsoft Corp',             pct: 3, price: 495, shares: 316  },
+    { ticker: 'AAPL',  name: 'Apple Inc',                  pct: 3, price: 253, shares: 617  },
+    { ticker: 'GOOGL', name: 'Alphabet Inc',               pct: 2, price: 198, shares: 526  },
+    { ticker: 'TSLA',  name: 'Tesla Inc',                  pct: 2, price: 330, shares: 316  },
+    { ticker: 'AMD',   name: 'Advanced Micro Devices',     pct: 2, price: 198, shares: 526  },
+    { ticker: 'PLTR',  name: 'Palantir Technologies',      pct: 2, price: 88,  shares: 1183 },
+    { ticker: 'SMCI',  name: 'Super Micro Computer',       pct: 2, price: 55,  shares: 1893 },
+    { ticker: 'JPM',   name: 'JPMorgan Chase',             pct: 2, price: 275, shares: 379  },
   ]},
   { id: 'crypto',    label: 'Crypto',               color: '#f0a030', holdings: [
-    { ticker: 'XRP',   pct: 12, price: 1.42,  shares: 399927.9718 },
-    { ticker: 'BTC',   pct: 8,  price: 81500, shares: 4.6454      },
-    { ticker: 'ETH',   pct: 5,  price: 3400,  shares: 69.5953     },
+    { ticker: 'XRP',   name: 'XRP',                        pct: 12, price: 1.56,  shares: 399927.9718 },
+    { ticker: 'BTC',   name: 'Bitcoin',                    pct: 8,  price: 89548, shares: 4.6454      },
+    { ticker: 'ETH',   name: 'Ethereum',                   pct: 5,  price: 3736,  shares: 69.5953     },
   ]},
   { id: 'dividends', label: 'Dividends',            color: '#5ab87a', holdings: [
-    { ticker: 'SCHD',  pct: 6, price: 28, shares: 10141 },
-    { ticker: 'JEPI',  pct: 4, price: 58, shares: 3264  },
-    { ticker: 'O',     pct: 3, price: 60, shares: 2366  },
-    { ticker: 'MO',    pct: 2, price: 55, shares: 1721  },
+    { ticker: 'SCHD',  name: 'Schwab US Dividend Equity',  pct: 6, price: 31, shares: 10141 },
+    { ticker: 'JEPI',  name: 'JPMorgan Equity Premium Inc.', pct: 4, price: 64, shares: 3264  },
+    { ticker: 'O',     name: 'Realty Income Corp',         pct: 3, price: 66, shares: 2366  },
+    { ticker: 'MO',    name: 'Altria Group',               pct: 2, price: 60, shares: 1721  },
   ]},
   { id: 'quantum',   label: 'Quantum / Emerging',   color: '#a78bfa', holdings: [
-    { ticker: 'IONQ',  pct: 2.5, price: 42, shares: 2817 },
-    { ticker: 'RGTI',  pct: 2.5, price: 15, shares: 7887 },
+    { ticker: 'IONQ',  name: 'IonQ Inc',                   pct: 2.5, price: 46, shares: 2817 },
+    { ticker: 'RGTI',  name: 'Rigetti Computing',          pct: 2.5, price: 16, shares: 7887 },
   ]},
   { id: 'metals',    label: 'Precious Metals',      color: '#c9a84c', holdings: [
-    { ticker: 'GLD',   pct: 5, price: 280, shares: 845  },
-    { ticker: 'SLV',   pct: 3, price: 30,  shares: 4732 },
+    { ticker: 'GLD',   name: 'SPDR Gold Trust',            pct: 5, price: 308, shares: 845  },
+    { ticker: 'SLV',   name: 'iShares Silver Trust',       pct: 3, price: 33,  shares: 4732 },
   ]},
   { id: 'energy',    label: 'Energy / Commodities', color: '#e07040', holdings: [
-    { ticker: 'XLE',   pct: 3, price: 95, shares: 1495 },
-    { ticker: 'USO',   pct: 2, price: 80, shares: 1183 },
-    { ticker: 'URA',   pct: 2, price: 35, shares: 2704 },
+    { ticker: 'XLE',   name: 'Energy Select Sector SPDR',  pct: 3, price: 104, shares: 1495 },
+    { ticker: 'USO',   name: 'United States Oil Fund',     pct: 2, price: 88,  shares: 1183 },
+    { ticker: 'URA',   name: 'Global X Uranium ETF',       pct: 2, price: 38,  shares: 2704 },
   ]},
 ];
 

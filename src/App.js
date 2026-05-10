@@ -10,6 +10,7 @@ import {
   MONTHLY_DRAW_PCT,
 } from './constants/portfolio';
 import { useModelPortfolio } from './hooks/useModelPortfolio';
+import Sparkline from './components/Sparkline';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const MONTHLY_NET = 6185;
@@ -450,6 +451,59 @@ const fmtShares = (n) => n == null ? '—' :
 const fmtPrice = (n) => (n == null || !(n > 0)) ? '—' :
   '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (n, dec = 1) => n == null ? '–' : (n >= 0 ? '+' : '') + Number(n).toFixed(dec) + '%';
+
+// ─── Live-tick UI helpers ──────────────────────────────────────────────────────
+function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => { ref.current = value; }, [value]);
+  return ref.current;
+}
+
+// Wraps a price-display element. When the watched numeric `value` changes,
+// the element briefly flashes — green if up, red if down — via a 400 ms
+// CSS keyframe. Skips the very first render so on-mount doesn't flash.
+function FlashOnChange({ value, as: Tag = 'span', style, children, threshold = 0 }) {
+  const prev = usePrevious(value);
+  const [animClass, setAnimClass] = useState('');
+  useEffect(() => {
+    if (prev == null || prev === value) return;
+    if (Math.abs(value - prev) <= threshold) return;
+    const cls = value > prev ? 'mag-flash-up' : 'mag-flash-down';
+    // Force restart even if the same direction fires twice in a row.
+    setAnimClass('');
+    const raf = requestAnimationFrame(() => setAnimClass(cls));
+    const timer = setTimeout(() => setAnimClass(''), 410);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
+  }, [value, prev, threshold]);
+  return <Tag className={animClass} style={style}>{children}</Tag>;
+}
+
+// "Live · simulated market data · Last update: Xs ago" caption used
+// everywhere the dashboard surfaces the data context. The "Xs ago" line
+// updates every second; everything else is static.
+function LiveCaption({ lastTickAt, label = 'Live · simulated market data', align = 'left', compact = false }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => force(n => (n + 1) & 0xff), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const ago = lastTickAt ? Math.max(0, Math.floor((Date.now() - lastTickAt) / 1000)) : null;
+  return (
+    <div style={{
+      fontFamily: MONO,
+      fontSize: compact ? 10 : 'clamp(10px, 2.4vw, 11px)',
+      color: '#6a6a58',
+      letterSpacing: '0.5px',
+      textAlign: align,
+      lineHeight: 1.4,
+      display: 'flex', flexWrap: 'wrap', gap: '0 6px',
+      justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+    }}>
+      <span>{label}</span>
+      {ago != null && <span style={{ opacity: 0.7 }}>· Last update: {ago}s ago</span>}
+    </div>
+  );
+}
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 const CURRENT_MONTH = TODAY_STR.slice(0, 7);
 
@@ -789,6 +843,14 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: #2a4a3a; border-radius: 3px; }
         option { background: #132b21; color: #e8e4d8; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        /* Live-tick flash. Brief background pulse on price-display elements
+           when their displayed number changes. Up = institutional green,
+           down = soft red, both at low alpha so they read as flickers, not
+           panels. */
+        @keyframes mag-flash-up   { 0% { background: rgba(90, 184, 122, 0.25); } 100% { background: transparent; } }
+        @keyframes mag-flash-down { 0% { background: rgba(196, 85, 85, 0.25); } 100% { background: transparent; } }
+        .mag-flash-up   { animation: mag-flash-up 400ms ease-out; }
+        .mag-flash-down { animation: mag-flash-down 400ms ease-out; }
         /* Bottom nav strip on mobile — horizontal-scroll, no visible scrollbar. */
         .mag-bottom-nav::-webkit-scrollbar { display: none; height: 0; width: 0; }
         .mag-bottom-nav { -ms-overflow-style: none; }
@@ -935,19 +997,30 @@ export default function App() {
 // Roadmap, and other secondary tabs. Same shared hook → ticks live with
 // every other portfolio surface.
 function LivePortfolioStrip({ label = 'Portfolio' }) {
-  const { totalValue, snapshotLabel } = useModelPortfolio();
+  const { totalValue, lastTickAt } = useModelPortfolio();
   return (
     <div style={{ ...S.card, marginBottom: 16, padding: 'clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px)', borderTop: `2px solid ${C.gold}` }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={S.cardTitle}>{label}</div>
-          <div style={{ fontFamily: MONO, fontSize: 'clamp(18px, 4.6vw, 24px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+          <FlashOnChange
+            value={totalValue}
+            style={{
+              display: 'inline-block',
+              fontFamily: MONO,
+              fontSize: 'clamp(18px, 4.6vw, 24px)',
+              fontWeight: 700,
+              color: C.textPrimary,
+              fontVariantNumeric: 'tabular-nums',
+              lineHeight: 1.1,
+              padding: '0 4px',
+              borderRadius: 3,
+            }}
+          >
             {fmtFullUSD(totalValue)}
-          </div>
+          </FlashOnChange>
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '0.4px', flexShrink: 0 }}>
-          {snapshotLabel}
-        </div>
+        <LiveCaption lastTickAt={lastTickAt} align="right" />
       </div>
     </div>
   );
@@ -958,7 +1031,7 @@ function LivePortfolioStrip({ label = 'Portfolio' }) {
 // land here → tap Back → return to Dashboard. Holdings sorted by position
 // value descending. Portfolio tab still shows the all-buckets view; this
 // drill-down is a Dashboard-only quick inspection.
-function BucketDetailView({ bucket, totalValue, onBack }) {
+function BucketDetailView({ bucket, totalValue, lastTickAt, onBack, onHoldingClick }) {
   const isMobile = useIsMobile();
   const sortedHoldings = useMemo(
     () => [...bucket.holdings].sort((a, b) => b.value - a.value),
@@ -997,48 +1070,82 @@ function BucketDetailView({ bucket, totalValue, onBack }) {
             {bucket.label}
           </div>
         </div>
-        <div style={{
-          fontFamily: MONO,
-          fontSize: 'clamp(22px, 6vw, 32px)',
-          fontWeight: 700,
-          color: C.gold,
-          fontVariantNumeric: 'tabular-nums',
-          lineHeight: 1.1,
-          wordBreak: 'keep-all',
-        }}>
+        <FlashOnChange
+          value={bucket.value}
+          style={{
+            display: 'inline-block',
+            fontFamily: MONO,
+            fontSize: 'clamp(22px, 6vw, 32px)',
+            fontWeight: 700,
+            color: C.gold,
+            fontVariantNumeric: 'tabular-nums',
+            lineHeight: 1.1,
+            wordBreak: 'keep-all',
+            padding: '0 5px',
+            borderRadius: 4,
+          }}
+        >
           {fmtFullUSD(bucket.value)}
-        </div>
+        </FlashOnChange>
         <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, marginTop: 6, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.4px' }}>
           {bucket.pctOfPortfolio.toFixed(2)}% of portfolio · {bucket.holdings.length} holding{bucket.holdings.length === 1 ? '' : 's'}
         </div>
+        <div style={{ marginTop: 8 }}>
+          <LiveCaption lastTickAt={lastTickAt} />
+        </div>
       </div>
 
-      {/* Holdings — table on desktop, stacked cards on mobile */}
+      {/* Holdings — table on desktop, stacked cards on mobile. Tap a row to
+          drill into the per-holding detail view. */}
       <div style={{ ...S.card, padding: 'clamp(14px, 4vw, 20px)' }}>
-        <div style={{ ...S.cardTitle, marginBottom: 10 }}>Holdings · sorted by value</div>
+        <div style={{ ...S.cardTitle, marginBottom: 10 }}>Holdings · sorted by value · tap for detail</div>
         {isMobile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sortedHoldings.map(h => (
-              <div
+              <button
                 key={h.ticker}
+                type="button"
+                onClick={onHoldingClick ? () => onHoldingClick(h.ticker) : undefined}
+                aria-label={`Open detail for ${h.ticker}`}
                 style={{
                   background: C.bgInput,
                   borderRadius: 6,
                   padding: '10px 12px',
                   borderLeft: `2px solid ${bucket.color}55`,
+                  borderTop: 'none', borderRight: 'none', borderBottom: 'none',
+                  textAlign: 'left',
                   minHeight: 56,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
+                  cursor: onHoldingClick ? 'pointer' : 'default',
+                  color: 'inherit', font: 'inherit',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
                     {h.ticker}
+                    {onHoldingClick && <span aria-hidden="true" style={{ marginLeft: 6, color: bucket.color, fontWeight: 700 }}>›</span>}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 'clamp(14px, 3.8vw, 16px)', fontWeight: 700, color: h.value > 0 ? C.gold : C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                  <FlashOnChange
+                    value={h.value}
+                    style={{
+                      display: 'inline-block',
+                      fontFamily: MONO,
+                      fontSize: 'clamp(14px, 3.8vw, 16px)',
+                      fontWeight: 700,
+                      color: h.value > 0 ? C.gold : C.textMuted,
+                      fontVariantNumeric: 'tabular-nums',
+                      padding: '0 4px',
+                      borderRadius: 3,
+                    }}
+                  >
                     {h.value > 0 ? fmtFullUSD(h.value) : '—'}
-                  </span>
+                  </FlashOnChange>
+                </div>
+                <div style={{ width: '100%', marginTop: 4 }}>
+                  <Sparkline data={h.history} width={300} height={28} fluid />
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
                   <span>{fmtShares(h.shares)} sh</span>
@@ -1047,33 +1154,56 @@ function BucketDetailView({ bucket, totalValue, onBack }) {
                   <span>·</span>
                   <span>{bucket.value > 0 && h.value > 0 ? `${h.pctOfBucket.toFixed(2)}% of bucket` : '— of bucket'}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ ...S.table, minWidth: 500 }}>
+            <table style={{ ...S.table, minWidth: 600 }}>
               <thead>
                 <tr>
                   <th style={{ ...S.th, cursor: 'default' }}>Ticker</th>
                   <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Shares</th>
                   <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Price</th>
+                  <th style={{ ...S.th, cursor: 'default', textAlign: 'center', width: 100 }}>4 m</th>
                   <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>Position Value</th>
                   <th style={{ ...S.th, cursor: 'default', textAlign: 'right' }}>% of Bucket</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedHoldings.map(h => (
-                  <tr key={h.ticker}>
-                    <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>{h.ticker}</td>
+                  <tr
+                    key={h.ticker}
+                    onClick={onHoldingClick ? () => onHoldingClick(h.ticker) : undefined}
+                    style={{ cursor: onHoldingClick ? 'pointer' : 'default' }}
+                  >
+                    <td style={{ ...S.td, fontWeight: 700, color: C.textPrimary }}>
+                      {h.ticker}
+                      {onHoldingClick && <span aria-hidden="true" style={{ marginLeft: 6, color: bucket.color, opacity: 0.7 }}>›</span>}
+                    </td>
                     <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
                       {fmtShares(h.shares)}
                     </td>
                     <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPrice(h.livePrice)}
                     </td>
-                    <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
-                      {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                    <td style={{ ...S.td, textAlign: 'center', padding: '4px 8px' }}>
+                      <Sparkline data={h.history} width={80} height={24} />
+                    </td>
+                    <td style={{ ...S.td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      <FlashOnChange
+                        value={h.value}
+                        style={{
+                          display: 'inline-block',
+                          fontWeight: 700,
+                          color: C.gold,
+                          padding: '0 4px',
+                          borderRadius: 3,
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                      </FlashOnChange>
                     </td>
                     <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
                       {bucket.value > 0 && h.value > 0 ? h.pctOfBucket.toFixed(2) + '%' : '—'}
@@ -1089,12 +1219,177 @@ function BucketDetailView({ bucket, totalValue, onBack }) {
   );
 }
 
+// ─── Holding Detail View (level-2 drill-down) ────────────────────────────────
+// Drills into a single ticker from BucketDetailView. Large live price with
+// flash-on-change, delta-vs-base summary, position-value strip, a 240×60
+// sparkline of the last 4 minutes of simulated ticks, and a 4-minute high /
+// low / range stat row. Mobile: everything stacks, sparkline scales fluid.
+function HoldingDetailView({ holding, bucket, lastTickAt, onBack }) {
+  const livePrice     = holding.livePrice;
+  const basePrice     = holding.baselinePrice;
+  const delta         = livePrice - basePrice;
+  const deltaPct      = basePrice > 0 ? (delta / basePrice) * 100 : 0;
+  const neutral       = Math.abs(deltaPct) < 0.05;
+  const deltaColor    = neutral ? C.textMuted : (delta >= 0 ? C.green : C.red);
+  const positionValue = holding.value;
+
+  const stats = useMemo(() => {
+    const data = holding.history || [];
+    if (data.length === 0) return { high: livePrice, low: livePrice, rangePct: 0 };
+    let high = data[0], low = data[0];
+    for (let i = 1; i < data.length; i++) {
+      if (data[i] > high) high = data[i];
+      if (data[i] < low)  low  = data[i];
+    }
+    const rangePct = low > 0 ? ((high - low) / low) * 100 : 0;
+    return { high, low, rangePct };
+  }, [holding.history, livePrice]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          fontFamily: MONO,
+          fontSize: 12,
+          fontWeight: 600,
+          padding: '10px 14px',
+          minHeight: 44,
+          background: 'transparent',
+          border: `1px solid ${C.border}`,
+          borderRadius: 6,
+          color: C.textSec,
+          cursor: 'pointer',
+          marginBottom: 16,
+          letterSpacing: '0.4px',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        ‹ Back to {bucket.label}
+      </button>
+
+      {/* Ticker header */}
+      <div style={{ ...S.card, marginBottom: 18, borderTop: `2px solid ${bucket.color}`, padding: 'clamp(16px, 4vw, 24px)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 8vw, 42px)', fontWeight: 700, color: C.textPrimary, letterSpacing: '0.5px', lineHeight: 1 }}>
+            {holding.ticker}
+          </div>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: bucket.color }} />
+          <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            {bucket.label}
+          </div>
+        </div>
+        {holding.name && (
+          <div style={{ fontFamily: MONO, fontSize: 12, color: C.textSec, marginBottom: 14, letterSpacing: '0.3px' }}>
+            {holding.name}
+          </div>
+        )}
+
+        <FlashOnChange
+          value={livePrice}
+          as="div"
+          style={{
+            display: 'inline-block',
+            fontFamily: MONO,
+            fontSize: 'clamp(26px, 7vw, 40px)',
+            fontWeight: 700,
+            color: C.gold,
+            letterSpacing: '0.3px',
+            lineHeight: 1.05,
+            fontVariantNumeric: 'tabular-nums',
+            padding: '0 6px',
+            borderRadius: 4,
+          }}
+        >
+          {fmtPrice(livePrice)}
+        </FlashOnChange>
+
+        <div style={{
+          fontFamily: MONO,
+          fontSize: 'clamp(13px, 3vw, 14px)',
+          fontWeight: 700,
+          color: deltaColor,
+          marginTop: 6,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {delta >= 0 ? '+' : ''}{fmtFullUSD(delta)} ({delta >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%)
+          <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 6 }}>vs. open</span>
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <LiveCaption lastTickAt={lastTickAt} />
+        </div>
+      </div>
+
+      {/* Sparkline */}
+      <div style={{ ...S.card, marginBottom: 18, padding: 'clamp(14px, 4vw, 20px)' }}>
+        <div style={{ ...S.cardTitle, marginBottom: 10 }}>Last 4 minutes</div>
+        <div style={{ width: '100%', maxWidth: 480 }}>
+          <Sparkline
+            data={holding.history}
+            width={480}
+            height={64}
+            fluid
+            strokeWidth={2}
+            showFill
+            ariaLabel={`${holding.ticker} price last 4 minutes`}
+          />
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', marginTop: 12, fontFamily: MONO, fontSize: 11, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+          <span>High (4 m): <strong style={{ color: C.textPrimary }}>{fmtPrice(stats.high)}</strong></span>
+          <span>Low (4 m): <strong style={{ color: C.textPrimary }}>{fmtPrice(stats.low)}</strong></span>
+          <span>Range: <strong style={{ color: C.textPrimary }}>{stats.rangePct.toFixed(2)}%</strong></span>
+        </div>
+      </div>
+
+      {/* Position summary */}
+      <div style={{ ...S.card, padding: 'clamp(14px, 4vw, 20px)' }}>
+        <div style={{ ...S.cardTitle, marginBottom: 10 }}>Position</div>
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'baseline',
+          fontFamily: MONO,
+          fontSize: 'clamp(14px, 3.6vw, 17px)',
+          color: C.textPrimary,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          <span style={{ color: C.textSec }}>{fmtShares(holding.shares)} sh</span>
+          <span style={{ color: C.textMuted }}>×</span>
+          <span style={{ color: C.textSec }}>{fmtPrice(livePrice)}</span>
+          <span style={{ color: C.textMuted }}>=</span>
+          <FlashOnChange
+            value={positionValue}
+            style={{
+              display: 'inline-block',
+              fontWeight: 700,
+              color: C.gold,
+              padding: '0 5px',
+              borderRadius: 3,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {fmtFullUSD(positionValue)}
+          </FlashOnChange>
+        </div>
+        <div style={{ marginTop: 8, display: 'flex', gap: '4px 16px', flexWrap: 'wrap', fontFamily: MONO, fontSize: 11, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+          <span>Target weight: {holding.targetPct}%</span>
+          <span>· {bucket.value > 0 ? holding.pctOfBucket.toFixed(2) : '—'}% of bucket</span>
+          <span>· {holding.pctOfPortfolio.toFixed(2)}% of portfolio</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Landing Portfolio Card ────────────────────────────────────────────────────
 // Snapshot-mode model portfolio shown as the headline of the post-PIN landing
 // view. Each bucket card is clickable on Dashboard — drives the bucket
 // drill-down. Numbers are static (see src/constants/portfolio.js).
 function LandingPortfolioCard({ onBucketClick }) {
-  const { buckets, totalValue, snapshotLabel } = useModelPortfolio();
+  const { buckets, totalValue, lastTickAt } = useModelPortfolio();
 
   const fmtShort = (n) => '$' + Math.round(n).toLocaleString('en-US');
 
@@ -1103,23 +1398,30 @@ function LandingPortfolioCard({ onBucketClick }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={S.cardTitle}>Portfolio</div>
-          <div style={{
-            fontFamily: MONO,
-            fontSize: 'clamp(22px, 7vw, 38px)',
-            fontWeight: 700,
-            color: C.textPrimary,
-            letterSpacing: '0.5px',
-            lineHeight: 1.1,
-            fontVariantNumeric: 'tabular-nums',
-            wordBreak: 'keep-all',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
+          <FlashOnChange
+            value={totalValue}
+            style={{
+              display: 'inline-block',
+              fontFamily: MONO,
+              fontSize: 'clamp(22px, 7vw, 38px)',
+              fontWeight: 700,
+              color: C.textPrimary,
+              letterSpacing: '0.5px',
+              lineHeight: 1.1,
+              fontVariantNumeric: 'tabular-nums',
+              wordBreak: 'keep-all',
+              whiteSpace: 'nowrap',
+              padding: '0 6px',
+              borderRadius: 4,
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             {fmtFullUSD(totalValue)}
-          </div>
-          <div style={{ fontFamily: MONO, fontSize: 'clamp(10px, 2.4vw, 11px)', color: C.textMuted, marginTop: 6, letterSpacing: '0.5px' }}>
-            {snapshotLabel}
+          </FlashOnChange>
+          <div style={{ marginTop: 6 }}>
+            <LiveCaption lastTickAt={lastTickAt} />
           </div>
         </div>
       </div>
@@ -1161,16 +1463,22 @@ function LandingPortfolioCard({ onBucketClick }) {
               }}>
                 {b.label}
               </div>
-              <div style={{
-                fontFamily: MONO,
-                fontSize: 'clamp(14px, 3.5vw, 18px)',
-                fontWeight: 700,
-                color: C.textPrimary,
-                marginBottom: 3,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
+              <FlashOnChange
+                value={b.value}
+                style={{
+                  display: 'inline-block',
+                  fontFamily: MONO,
+                  fontSize: 'clamp(14px, 3.5vw, 18px)',
+                  fontWeight: 700,
+                  color: C.textPrimary,
+                  marginBottom: 3,
+                  fontVariantNumeric: 'tabular-nums',
+                  padding: '0 4px',
+                  borderRadius: 3,
+                }}
+              >
                 {b.value > 0 ? fmtShort(b.value) : '—'}
-              </div>
+              </FlashOnChange>
               <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                 <span>{`${b.pctOfPortfolio.toFixed(2)}% of portfolio`}</span>
                 {clickable && (
@@ -1330,18 +1638,21 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
   const isMobile = useIsMobile();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [drilldownBucketId, setDrilldownBucketId] = useState(null);
+  const [drilldownTicker,   setDrilldownTicker]   = useState(null);
   const { alloc } = useMemo(() => portfolioStats(positions), [positions]);
   const alerts = useMemo(() => calcDriftAlerts(alloc, targets), [alloc, targets]);
 
-  // Snapshot-mode model portfolio drives the headline KPI cards.
+  // Live (simulated) model drives the headline + KPI cards. Re-renders
+  // every 2 s as the marketSim engine ticks.
   const model = useModelPortfolio();
   const portfolioTotal = model.totalValue;
 
-  // Bucket drill-down (Dashboard-only quick inspection — Portfolio tab is
-  // still the full all-buckets view). Click a bucket card on the headline
-  // portfolio → enter drill-down → click "Back" to return.
+  // Two-level drill-down. Dashboard → bucket → holding → back.
   const drilldownBucket = drilldownBucketId
     ? model.buckets.find(b => b.id === drilldownBucketId)
+    : null;
+  const drilldownHolding = (drilldownBucket && drilldownTicker)
+    ? drilldownBucket.holdings.find(h => h.ticker === drilldownTicker)
     : null;
 
   const thisMonthExp = useMemo(() => expenses.filter(e => e.date.startsWith(CURRENT_MONTH)), [expenses]);
@@ -1374,12 +1685,25 @@ function DashboardTab({ positions, expenses, nwSnapshots, givingEntries, onAddEx
 
   const recentExp = expenses.slice(0, 5);
 
+  if (drilldownHolding) {
+    return (
+      <HoldingDetailView
+        holding={drilldownHolding}
+        bucket={drilldownBucket}
+        lastTickAt={model.lastTickAt}
+        onBack={() => setDrilldownTicker(null)}
+      />
+    );
+  }
+
   if (drilldownBucket) {
     return (
       <BucketDetailView
         bucket={drilldownBucket}
         totalValue={model.totalValue}
-        onBack={() => setDrilldownBucketId(null)}
+        lastTickAt={model.lastTickAt}
+        onBack={() => { setDrilldownBucketId(null); setDrilldownTicker(null); }}
+        onHoldingClick={(ticker) => setDrilldownTicker(ticker)}
       />
     );
   }
@@ -1760,9 +2084,20 @@ function BucketSection({ bucket, totalValue, isMobile }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 'clamp(14px, 3.6vw, 16px)', fontWeight: 700, color: C.gold }}>
+          <FlashOnChange
+            value={bucket.value}
+            style={{
+              display: 'inline-block',
+              fontSize: 'clamp(14px, 3.6vw, 16px)',
+              fontWeight: 700,
+              color: C.gold,
+              padding: '0 4px',
+              borderRadius: 3,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
             {bucket.value > 0 ? fmtFullUSD(bucket.value) : '—'}
-          </span>
+          </FlashOnChange>
           <span style={{ fontSize: 11, color: C.textMuted }}>
             {totalValue > 0 ? `${bucket.pctOfPortfolio.toFixed(2)}% of portfolio` : ''}
           </span>
@@ -1794,9 +2129,21 @@ function BucketSection({ bucket, totalValue, isMobile }) {
                   <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: C.textPrimary, letterSpacing: '0.3px' }}>
                     {h.ticker}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 'clamp(14px, 3.8vw, 16px)', fontWeight: 700, color: h.value > 0 ? C.gold : C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                  <FlashOnChange
+                    value={h.value}
+                    style={{
+                      display: 'inline-block',
+                      fontFamily: MONO,
+                      fontSize: 'clamp(14px, 3.8vw, 16px)',
+                      fontWeight: 700,
+                      color: h.value > 0 ? C.gold : C.textMuted,
+                      fontVariantNumeric: 'tabular-nums',
+                      padding: '0 4px',
+                      borderRadius: 3,
+                    }}
+                  >
                     {h.value > 0 ? fmtFullUSD(h.value) : '—'}
-                  </span>
+                  </FlashOnChange>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontFamily: MONO, fontSize: 10, color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
                   <span>{fmtShares(h.shares)} sh</span>
@@ -1810,7 +2157,7 @@ function BucketSection({ bucket, totalValue, isMobile }) {
                 {isOpen && h.shares != null && h.livePrice > 0 && (
                   <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.bgPrimary}`, fontFamily: MONO, fontSize: 11, color: C.textSec, fontVariantNumeric: 'tabular-nums', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
                     <span>Target wt: {h.targetPct}%</span>
-                    <span>Snapshot price: {fmtPrice(h.baselinePrice)}</span>
+                    <span>Open price: {fmtPrice(h.baselinePrice)}</span>
                   </div>
                 )}
               </div>
@@ -1841,8 +2188,20 @@ function BucketSection({ bucket, totalValue, isMobile }) {
                   <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
                     {fmtPrice(h.livePrice)}
                   </td>
-                  <td style={{ ...S.td, textAlign: 'right', fontWeight: 700, color: C.gold, fontVariantNumeric: 'tabular-nums' }}>
-                    {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                  <td style={{ ...S.td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    <FlashOnChange
+                      value={h.value}
+                      style={{
+                        display: 'inline-block',
+                        fontWeight: 700,
+                        color: C.gold,
+                        padding: '0 4px',
+                        borderRadius: 3,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {h.value > 0 ? fmtFullUSD(h.value) : '—'}
+                    </FlashOnChange>
                   </td>
                   <td style={{ ...S.td, textAlign: 'right', color: C.textSec, fontVariantNumeric: 'tabular-nums' }}>
                     {bucket.value > 0 && h.value > 0 ? h.pctOfBucket.toFixed(2) + '%' : '—'}
@@ -4110,12 +4469,25 @@ function MarketsTab() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={S.cardTitle}>Your Holdings</div>
-            <div style={{ fontFamily: MONO, fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 700, color: C.textPrimary, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            <FlashOnChange
+              value={model.totalValue}
+              style={{
+                display: 'inline-block',
+                fontFamily: MONO,
+                fontSize: 'clamp(20px, 5.5vw, 28px)',
+                fontWeight: 700,
+                color: C.textPrimary,
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1.1,
+                padding: '0 5px',
+                borderRadius: 4,
+              }}
+            >
               {fmtFullUSD(model.totalValue)}
-            </div>
+            </FlashOnChange>
           </div>
-          <div style={{ textAlign: 'right', fontFamily: MONO, fontSize: 11, color: C.textMuted, letterSpacing: '0.4px' }}>
-            {model.snapshotLabel}
+          <div style={{ textAlign: 'right', minWidth: 0 }}>
+            <LiveCaption lastTickAt={model.lastTickAt} align="right" />
           </div>
         </div>
       </div>

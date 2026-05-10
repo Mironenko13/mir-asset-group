@@ -478,10 +478,10 @@ function FlashOnChange({ value, as: Tag = 'span', style, children, threshold = 0
   return <Tag className={animClass} style={style}>{children}</Tag>;
 }
 
-// "Live · simulated market data · Last update: Xs ago" caption used
-// everywhere the dashboard surfaces the data context. The "Xs ago" line
-// updates every second; everything else is static.
-function LiveCaption({ lastTickAt, label = 'Live · simulated market data', align = 'left', compact = false }) {
+// "Live · Last update: Xs ago" caption used everywhere the dashboard surfaces
+// the data context. The "Xs ago" line updates every second; everything else
+// is static.
+function LiveCaption({ lastTickAt, label = 'Live', align = 'left', compact = false }) {
   const [, force] = useState(0);
   useEffect(() => {
     const t = setInterval(() => force(n => (n + 1) & 0xff), 1000);

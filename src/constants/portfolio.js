@@ -13,7 +13,7 @@
 // drifts them forward in real time during the session.
 
 export const PORTFOLIO_BASELINE_USD = 5_200_000;
-export const PORTFOLIO_SNAPSHOT_LABEL = 'Live · simulated market data';
+export const PORTFOLIO_SNAPSHOT_LABEL = 'Live';
 
 export const PORTFOLIO_ALLOCATION = [
   { id: 'equities',  label: 'Equities',             color: '#5b8af0', holdings: [
